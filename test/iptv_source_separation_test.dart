@@ -21,14 +21,6 @@ void main() {
       expect(IptvSettings.defaultIptvSourceApi, isEmpty);
     });
 
-    test('旧版 HTWMedia 默认地址会迁移到 ChinaIPTV', () {
-      IptvSettings.defaultIptvSourceApi = Constants.legacyIptvSourceApi;
-      IptvSettings.iptvSourceCacheTime = DateTime.now().millisecondsSinceEpoch;
-
-      expect(IptvSettings.defaultIptvSourceApi, Constants.defaultIptvSourceApi);
-      expect(IptvSettings.iptvSourceCacheTime, 0);
-    });
-
     test('改成第三方接口后读回新值', () async {
       IptvSettings.defaultIptvSourceApi = 'https://example.com/api/iptv';
       expect(IptvSettings.defaultIptvSourceApi, 'https://example.com/api/iptv');

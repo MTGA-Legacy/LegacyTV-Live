@@ -45,7 +45,7 @@ void main() {
     final app = _host(
       label: 'open',
       dialog: TvTextEditDialog(
-        title: '用户参数',
+        title: '文本参数',
         hint: '输入参数',
         initialValue: 'old-value',
         onSave: saved.add,
@@ -56,7 +56,7 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('用户参数'), findsOneWidget);
+    expect(find.text('文本参数'), findsOneWidget);
     expect(find.text('old-value'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
     expect(find.text('保存'), findsOneWidget);
@@ -107,7 +107,7 @@ void main() {
     final app = _host(
       label: 'open',
       dialog: TvTextEditDialog(
-        title: '用户参数',
+        title: '文本参数',
         hint: '输入参数',
         initialValue: '',
         onSave: (_) {},
@@ -133,7 +133,7 @@ void main() {
     final app = _host(
       label: 'open',
       dialog: TvTextEditDialog(
-        title: '用户参数',
+        title: '文本参数',
         hint: '输入参数',
         initialValue: '',
         onSave: saved.add,

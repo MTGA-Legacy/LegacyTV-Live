@@ -7,9 +7,6 @@ class Constants {
   /// （清空后只加载「自定义直播源」）。改动走 Prefs，服务端接入方不需要改代码。
   static const defaultIptvSourceApi = 'https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8';
 
-  /// 旧版本默认源，仅用于已安装版本的一次性迁移。
-  static const legacyIptvSourceApi = 'https://htwmedia.dpdns.org/Home/IPTVSearch';
-
   /// 直播源缓存时间
   static const iptvSourceCacheKeepTime = 1000 * 60 * 60; // 1小时
 

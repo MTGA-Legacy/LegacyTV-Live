@@ -97,14 +97,6 @@ class IptvSettings {
     final key = IptvSetting.defaultIptvSourceApi.toString();
     final stored = PrefsUtil.getString(key);
 
-    // 已安装的旧版本可能保存了 HTWMedia 地址。只迁移这个历史默认值，
-    // 用户自行填写的其它地址保持不变。
-    if (stored == Constants.legacyIptvSourceApi) {
-      PrefsUtil.setString(key, Constants.defaultIptvSourceApi);
-      PrefsUtil.setInt(IptvSetting.iptvSourceCacheTime.toString(), 0);
-      return Constants.defaultIptvSourceApi;
-    }
-
     return stored ?? Constants.defaultIptvSourceApi;
   }
   static set defaultIptvSourceApi(String value) {

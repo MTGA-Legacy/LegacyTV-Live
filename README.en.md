@@ -7,6 +7,7 @@ A lightweight IPTV player for Android 4.4+ TVs and TV boxes.
 - Android 4.4+ support, including an ARM32/ARM64 universal build
 - Uses the auto-updating [ChinaIPTV](https://github.com/hujingguang/ChinaIPTV) M3U by default:
   `https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8`
+- GitHub upstream requests include a fixed-host compatibility path for Android 4.4 CA stores
 - Supports M3U/M3U8, TVBox text playlists, and custom subscriptions
 - Automatically tries another URL for a channel when playback fails
 - D-pad, number-key, and OK-key navigation for TV remotes

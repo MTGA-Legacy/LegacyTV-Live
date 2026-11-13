@@ -1,8 +1,5 @@
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:video_player_example/common/utils/auth_cipher.dart';
-import 'package:flutter/services.dart';
 import 'package:video_player_example/common/index.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -12,67 +9,6 @@ final _logger = LoggerUtil.create(['iptv']);
 /// iptv工具类
 class IptvUtil {
   IptvUtil._();
-
-  static const _locationCacheKey = 'cached_location';
-
-  /// 获取省名：缓存优先（持久化），首次才走网络
-  static Future<String> getCurrentProvinceInfo() async {
-    final cached = PrefsUtil.getString(_locationCacheKey);
-    if (cached != null && cached.isNotEmpty) {
-      _refreshLocationAsync();
-      return cached;
-    }
-    return _fetchAndCacheLocation();
-  }
-
-  static Future<String> _fetchAndCacheLocation() async {
-    final location = await _fetchLocation();
-    if (location.isNotEmpty) {
-      PrefsUtil.setString(_locationCacheKey, location);
-    }
-    return location;
-  }
-
-  static Future<void> _refreshLocationAsync() async {
-    try {
-      await _fetchAndCacheLocation();
-    } catch (_) {}
-  }
-
-  /// 获取当前省份名，按优先级尝试多个接口
-  static Future<String> _fetchLocation() async {
-    RequestUtil.addOrUpdateHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0");
-
-    // 1. ip138（默认首选）
-    try {
-      final resp = await RequestUtil.get("https://2026.ip138.com/");
-      if (resp.contains("来自")) {
-        return resp.split('来自：').last.split('</span>').first.trim();
-      }
-    } catch (_) {}
-
-    // 2. ip-api.com（国际接口，返回中文）
-    try {
-      final resp = await RequestUtil.get("http://ip-api.com/json/?lang=zh-CN");
-      if (resp.isNotEmpty) {
-        final data = jsonDecode(resp);
-        final region = data['regionName'] as String? ?? '';
-        if (region.isNotEmpty) return region;
-      }
-    } catch (_) {}
-
-    // 3. api.ip.sb（备选）
-    try {
-      final resp = await RequestUtil.get("https://api.ip.sb/geoip");
-      if (resp.isNotEmpty) {
-        final data = jsonDecode(resp);
-        final region = data['region'] as String? ?? '';
-        if (region.isNotEmpty) return region;
-      }
-    } catch (_) {}
-
-    return '';
-  }
 
   /// 获取内置远程直播源
   static Future<String> _fetchBuiltinSource() async {
@@ -85,49 +21,12 @@ class IptvUtil {
       _logger.debug('默认源服务已停用，跳过内置源');
       return '';
     }
-    _logger.debug('获取内置直播源');
+    _logger.debug('获取内置直播源（ChinaIPTV）: $api');
 
     try {
-      var time = DateTime
-          .now()
-          .millisecondsSinceEpoch
-          .toString();
-      var plainText = "HTV-First" + time;
-      // 鉴权串由 AuthCipher 生成。开源仓库里它是桩（返回空串），
-      // 此时不携带 authorization 头，服务端按匿名请求返回公网列表。
-      final token = AuthCipher.encrypt(plainText);
-      if (token.isNotEmpty) {
-        RequestUtil.addOrUpdateHeader("authorization", token);
-      }
-
-      // 位置信息不阻塞源获取：直接读缓存（首次为空串），后台异步刷新
-      getCurrentProvinceInfo();
-      var user = PrefsUtil.getString('assign_user');
-      if (user == null || user.isEmpty) {
-        // assets/assign.txt 是默认用户标识。自建仓库/改过 asset 的人那里可能没有这个文件，
-        // 缺失时不能让整个取源流程崩掉 —— 退化成不带 u 参数的请求，服务端照样返回公网列表。
-        try {
-          user = (await rootBundle.loadString('assets/assign.txt')).trim();
-          if (user.isNotEmpty) PrefsUtil.setString('assign_user', user);
-        } catch (e) {
-          _logger.debug('未找到 assets/assign.txt，本次请求不带用户标识: $e');
-          user = '';
-        }
-      }
-      final location = PrefsUtil.getString(_locationCacheKey) ?? '';
-
-      final separator = api.contains('?') ? '&' : '?';
-      var reqUrl = api + separator + 'appid=3704&time=' +
-          time + "&sr=1&loc=" + location + "&u="+user;
-
-      _logger.debug('获取内置直播源: $reqUrl');
-
       final t2 = DateTime.now().millisecondsSinceEpoch;
-      var result = await RequestUtil.get(reqUrl);
+      final result = await RequestUtil.get(api);
       _logger.debug('请求内置直播源耗时: ${DateTime.now().millisecondsSinceEpoch - t2}ms');
-
-      RequestUtil.removeHeader("authorization");
-
       _logger.debug('获取内置直播源总耗时: ${DateTime.now().millisecondsSinceEpoch - t0}ms');
       return result;
     } catch (e, st) {

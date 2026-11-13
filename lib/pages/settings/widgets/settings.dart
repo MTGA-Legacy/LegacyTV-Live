@@ -54,21 +54,6 @@ class _SettingsMainState extends State<SettingsMain> {
     }
   }
 
-  void _showAssignUserDialog() {
-    _showTvTextEditDialog(
-      title: '用户参数',
-      hint: '输入参数',
-      initialValue: PrefsUtil.getString('assign_user') ?? '',
-      maxWidth: 500,
-      fontSize: 16,
-      onSave: (value) {
-        PrefsUtil.setString('assign_user', value);
-        IptvSettings.iptvSourceCacheTime = 0;
-        iptvStore.refreshIptvList().then((_) { if (mounted) setState(() {}); });
-      },
-    );
-  }
-
   /// 电视端文本编辑弹窗
   ///
   /// Flutter 的按键分发顺序是「叶子节点 → 根」(focus_manager.dart:1995)，
@@ -364,15 +349,6 @@ class _SettingsMainState extends State<SettingsMain> {
   void refreshSettingGroupList() {
     final groupList = [
       SettingGroup(name: '应用', items: [
-        SettingItem(
-          title: '用户参数',
-          value: () {
-            final v = PrefsUtil.getString('assign_user') ?? '';
-            return v.length > 8 ? '${v.substring(0, 8)}...' : v;
-          },
-          description: () => '点击编辑',
-          onTap: () => _showAssignUserDialog(),
-        ),
         SettingItem(
           title: '开机自启',
           value: () => AppSettings.bootLaunch ? '启用' : '禁用',
