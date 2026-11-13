@@ -32,7 +32,7 @@ dependencies:
     # 网络
   shelf: ^1.4.1
   shelf_router: ^1.1.4
-  http: ^1.1.2
+  http: ^1.1.0
   html: ^0.15.0
   # 日志
   talker: ^4.1.3
