@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -47,6 +49,12 @@ void main() async {
   GetIt.I.registerSingleton(PlayerStore());
   GetIt.I.registerSingleton(IptvStore());
   GetIt.I.registerSingleton(UpdateStore());
+
+  // 本地调试服务尽早启动，这样播放页面不必先进入“设置”才能读取日志。
+  // 失败只记录日志，不阻塞电视端正常播放。
+  unawaited(HttpServerUtil.init().catchError((Object error, StackTrace stackTrace) {
+    LoggerUtil.error('本地调试服务启动失败', error, stackTrace);
+  }));
 
   // 读取收藏频道
   await GetIt.I<IptvStore>().loadFavorites();

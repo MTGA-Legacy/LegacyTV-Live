@@ -547,7 +547,8 @@ class _SettingsMainState extends State<SettingsMain> {
         SettingItem(
           title: '更多设置',
           value: () => '',
-          description: () => '访问以下网址进行配置：${HttpServerUtil.serverUrl}',
+          description: () =>
+              '配置：${HttpServerUtil.serverUrl}\n日志：${HttpServerUtil.serverUrl}/api/logs.txt',
           onTap: () => _showServerQrcode(),
         ),
       ]),

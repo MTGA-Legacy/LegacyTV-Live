@@ -109,21 +109,37 @@ abstract class PlayerStoreBase with Store {
   /// 是否已释放
   bool _disposed = false;
 
-  /// 硬解是否失败过，需要回退到软解
+  /// 当前播放器会话是否已经降级到软解。
   ///
-  /// 注意：这个标志必须与 mediacodec 选项**双向同步**，
-  /// 每次播放都要显式下发 `_hwDecodeFailed ? 0 : 1`。
-  /// 早期版本只在失败时写 0、从来没人写回 1，导致一次误判
-  /// （例如某个源返回 404）就让整个会话一直跑 CPU 软解，直到重启 App。
+  /// 老电视的 MediaCodec 失败可能表现为 error、prepareAsync 长时间不返回，
+  /// 或缓冲完全没有进展。降级后在本次播放器会话内保持 mediacodec=0，
+  /// 避免每换一个源就再次触发同一个坏的硬解器；重新创建播放器时才重新探测硬解。
   bool _hwDecodeFailed = false;
 
-  /// 还没渲染出首帧就失败一次时立即回退软解。
-  ///
-  /// 老电视的 MediaCodec 初始化失败通常不会带来可识别的错误码，
-  /// 而是直接进入 error；继续尝试第二个源只会让用户多等一次。
-  /// 网络错误后若软解成功，首帧回调会清除该标志，下一次播放自动恢复硬解。
+  /// Android 4.4 老电视先固定使用 FFmpeg 软件解码。
+  /// 真机确认 CPU 性能够用后，再把这里改为 true 重新启用 MediaCodec 探测。
+  static const bool _enableHardwareDecode = false;
+
+  /// 当前实际使用的解码模式，供本地调试接口读取。
+  String get decoderMode =>
+      _enableHardwareDecode && !_hwDecodeFailed ? 'hardware' : 'software';
+
+  bool get hardwareDecodeEnabled => decoderMode == 'hardware';
+
+  bool get hardwareDecodeFallback => _hwDecodeFailed;
+
+  /// 兼容老电视没有错误码、只表现为首帧前失败的 MediaCodec。
   static const int _hwFailThreshold = 1;
   int _hwDecodeErrorStreak = 0;
+
+  void _fallbackToSoftware(String reason) {
+    if (_hwDecodeFailed) return;
+    _hwDecodeFailed = true;
+    _hwDecodeErrorStreak = _hwFailThreshold;
+    // 让下一次播放无条件重新下发 mediacodec=0，避免缓存的 1 把降级吞掉。
+    _lastMediacodec = null;
+    _logger.warning('硬解首帧失败，当前播放器会话回退软解：$reason');
+  }
 
   /// 本次播放是否已经渲染出画面。
   /// 用于区分「解码失败」与「网络类错误（404 / DNS / 断网）」：
@@ -203,10 +219,12 @@ abstract class PlayerStoreBase with Store {
       opt.setPlayerOption("packet-buffering", 0);
       opt.setPlayerOption("infbuf", 0);
       opt.setPlayerOption("framedrop", 5);
-      opt.setPlayerOption("mediacodec", 1);
+      // 当前版本先固定走软件解码，避免海信 Android 4.4 厂商 MediaCodec
+      // 在 configure / 首帧阶段卡死或返回不完整画面。
+      opt.setPlayerOption("mediacodec", 0);
       opt.setPlayerOption("mediacodec-auto-rotate", 1);
       opt.setPlayerOption("mediacodec-handle-resolution-change", 1);
-      opt.setPlayerOption("mediacodec-hevc", 1);
+      opt.setPlayerOption("mediacodec-hevc", 0);
       // 全局打开自动起播：setDataSource 之后直接 prepareAsync 即可，
       // 省掉 setDataSource(autoPlay: true) 内部额外的 setOption + start 两次 await。
       opt.setPlayerOption("start-on-prepared", 1);
@@ -216,9 +234,9 @@ abstract class PlayerStoreBase with Store {
 
       await player.applyOptions(opt);
 
-      _lastMediacodec = 1;
-      _hwDecodeFailed = false;
-      _hwDecodeErrorStreak = 0;
+      // 不在这里清除降级状态：同一个播放器实例重试预热时，必须继续使用软解。
+      // reinitPlayer() 创建新实例时会显式重置，重新探测硬解。
+      _lastMediacodec = 0;
       _logger.debug('预热播放器完成');
     } catch (e) {
       _optionsInitialized = false;
@@ -241,7 +259,7 @@ abstract class PlayerStoreBase with Store {
 
   /// 每次播放前下发 mediacodec，取值未变化时跳过
   Future<void> _applyDecodeOptions() async {
-    final value = _hwDecodeFailed ? 0 : 1;
+    final value = _enableHardwareDecode && !_hwDecodeFailed ? 1 : 0;
     if (_lastMediacodec == value) return;
     await player.setOption(FijkOption.playerCategory, "mediacodec", value);
     _lastMediacodec = value;
@@ -359,6 +377,9 @@ abstract class PlayerStoreBase with Store {
         // setDataSource / prepareAsync 直接抛错时，native 不会给出任何状态回调，
         // 界面会干等在 waiting 上。这里主动驱动上层切源，别让这次失败石沉大海。
         _cancelWatchdog();
+        if (!_rendered) {
+          _fallbackToSoftware('setDataSource/prepareAsync 异常');
+        }
         SourceHealthUtil.recordFailure(currentUrl);
         _onErrorCallback?.call();
       }
@@ -384,7 +405,11 @@ abstract class PlayerStoreBase with Store {
       _logger.warning(
           '起播超时 ${startWatchdogTimeout.inSeconds}s 仍未出画面，判定该源不可用');
       _freezeTimer?.cancel();
-      // 卡在 asyncPreparing 不上不下，native 不会给 error 回调，这里主动记一次
+      // 卡在 asyncPreparing 不上不下，native 不会给 error 回调；
+      // 先标记软解，再让上层换源，下一次 prepare 才会真正关闭 MediaCodec。
+      if (!_rendered) {
+        _fallbackToSoftware('起播看门狗超时');
+      }
       SourceHealthUtil.recordFailure(currentUrl);
       // 与卡顿/错误走同一条出口：上层据此切下一个备用源
       _onErrorCallback?.call();
@@ -414,6 +439,7 @@ abstract class PlayerStoreBase with Store {
     _lastVolume = null;
     _lastReferer = null;
     _lastUserAgent = null;
+    _hwDecodeFailed = false;
     _hwDecodeErrorStreak = 0;
     _rendered = false;
     // 让还挂着的切台请求失效
@@ -425,13 +451,13 @@ abstract class PlayerStoreBase with Store {
   void _playerValueListener() {
     final st = player.state;
 
-    // 画面已经渲染出来，说明解码链路可用：撤销此前的硬解降级
+    // 画面已经渲染出来，说明当前模式可用。
+    // 如果此前已经降级到软解，不在本次会话内立即恢复硬解，避免老电视换源时反复失败。
     if (!_rendered && player.value.videoRenderStart) {
       _rendered = true;
-      if (_hwDecodeFailed || _hwDecodeErrorStreak > 0) {
-        _hwDecodeFailed = false;
-        _hwDecodeErrorStreak = 0;
-        _logger.debug('解码正常，恢复硬解');
+      _hwDecodeErrorStreak = 0;
+      if (_hwDecodeFailed) {
+        _logger.debug('软解首帧成功，当前播放器会话保持软解');
       }
       // 画面已经出来就说明这次起播成功了
       _cancelWatchdog();
@@ -445,15 +471,11 @@ abstract class PlayerStoreBase with Store {
       _logger.warning("播放错误");
       _cancelWatchdog();
       _freezeTimer?.cancel();
-      // 网络类错误（404 / DNS / 断网）同样走到这里，过去只要出现 error
-      // 就把硬解降级且再也不恢复 —— 一次误判就让整场直播都跑 CPU 软解。
-      // 只有"还没渲染出画面"才可能是解码问题，并要求连续多次才降级。
-      if (!isSwitching && !_rendered) {
+      // 老电视的硬解失败可能只上报一个通用 error，无法从 Dart 侧区分具体错误码。
+      // 只有首帧前的 error 才触发会话级软解回退；已经出过画面则按网络断流处理。
+      if (!_rendered) {
         _hwDecodeErrorStreak++;
-        if (_hwDecodeErrorStreak >= _hwFailThreshold && !_hwDecodeFailed) {
-          _hwDecodeFailed = true;
-          _logger.warning("连续 $_hwDecodeErrorStreak 次未能渲染出画面，判定硬解不可用");
-        }
+        _fallbackToSoftware('native error（首帧前）');
       }
       // 起播失败与播到一半断流都记一次：前者说明源不可用，后者说明源不稳定。
       // 断网时确实会把整批源都记上，但冷却期一过就会重新给机会，
@@ -614,7 +636,10 @@ abstract class PlayerStoreBase with Store {
       _cancelWatchdog();
       _freezeTimer?.cancel();
       _freezeTimer = null;
-      // 拿不到数据就是源不可用，与起播超时同级
+      // 拿不到数据就是源不可用，与起播超时同级；若硬解器卡死，也要让下一次播放走软解。
+      if (!_rendered) {
+        _fallbackToSoftware('起播缓冲停滞');
+      }
       SourceHealthUtil.recordFailure(currentUrl);
       _onErrorCallback?.call();
     });

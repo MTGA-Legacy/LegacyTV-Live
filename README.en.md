@@ -10,6 +10,7 @@ A lightweight IPTV player for Android 4.4+ TVs and TV boxes.
 - Supports M3U/M3U8, TVBox text playlists, and custom subscriptions
 - Automatically tries another URL for a channel when playback fails
 - D-pad, number-key, and OK-key navigation for TV remotes
+- Software decoding is enabled by default on Android 4.4 to avoid unstable vendor MediaCodec implementations
 - No ads or account; the default build makes no third-party EPG request
 
 ChinaIPTV maintains the playlist upstream. This repository references the remote playlist and does not copy channel data. Availability depends on the TV network and the upstream playlist status.
@@ -23,6 +24,7 @@ Download `LegacyTV.apk` (includes armeabi-v7a and arm64-v8a) from Releases or Ac
 - Edit or clear the default URL under **Live source → Default source service**
 - Add your own M3U/TXT subscription under **Custom live source**
 - The app keeps the previous cache when a refresh fails
+- A local debug service starts at port `10381`: use `/api/logs.txt` for plain text, `/api/logs` for JSON, and `/api/status` for player state
 
 ## Build
 

@@ -13,39 +13,37 @@ class Logger {
   }
 
   void verbose(dynamic msg) {
-    if (!LoggerUtil.enabled) return;
-    LoggerUtil.logger.verbose(_resolveMsg(msg));
+    LoggerUtil.verbose(_resolveMsg(msg));
   }
 
   void debug(dynamic msg) {
-    if (!LoggerUtil.enabled) return;
-    LoggerUtil.logger.debug(_resolveMsg(msg));
+    LoggerUtil.debug(_resolveMsg(msg));
   }
 
   void info(dynamic msg) {
-    if (!LoggerUtil.enabled) return;
-    LoggerUtil.logger.info(_resolveMsg(msg));
+    LoggerUtil.info(_resolveMsg(msg));
   }
 
   void warning(dynamic msg) {
-    if (!LoggerUtil.enabled) return;
-    LoggerUtil.logger.warning(_resolveMsg(msg));
+    LoggerUtil.warning(_resolveMsg(msg));
   }
 
   void error(dynamic msg, [Object? exception, StackTrace? stackTrace]) {
-    if (!LoggerUtil.enabled) return;
-    LoggerUtil.logger.error(_resolveMsg(msg), exception, stackTrace);
+    LoggerUtil.error(_resolveMsg(msg), exception, stackTrace);
   }
 
   void handle(Object exception, [StackTrace? stackTrace, dynamic msg]) {
-    if (!LoggerUtil.enabled) return;
-    LoggerUtil.logger.handle(exception, stackTrace, _resolveMsg(msg));
+    LoggerUtil.handle(exception, stackTrace, _resolveMsg(msg));
   }
 }
 
 /// 日志工具
 class LoggerUtil {
   static Talker? _logger;
+
+  /// 本地调试接口保留的日志条数。
+  static const int maxHistoryEntries = 300;
+  static final List<Map<String, dynamic>> _history = <Map<String, dynamic>>[];
 
   /// 日志实现。
   ///
@@ -86,33 +84,81 @@ class LoggerUtil {
   }
 
   static void verbose(dynamic msg) {
+    _record('verbose', msg);
     if (!enabled) return;
     logger.verbose(msg);
   }
 
   static void debug(dynamic msg) {
+    _record('debug', msg);
     if (!enabled) return;
     logger.debug(msg);
   }
 
   static void info(dynamic msg) {
+    _record('info', msg);
     if (!enabled) return;
     logger.info(msg);
   }
 
   static void warning(dynamic msg) {
+    _record('warning', msg);
     if (!enabled) return;
     logger.warning(msg);
   }
 
   static void error(dynamic msg, [Object? exception, StackTrace? stackTrace]) {
+    _record('error', msg, exception, stackTrace);
     if (!enabled) return;
     logger.error(msg, exception, stackTrace);
   }
 
   static void handle(Object exception, [StackTrace? stackTrace, dynamic msg]) {
+    _record('error', msg ?? exception, exception, stackTrace);
     if (!enabled) return;
     logger.handle(exception, stackTrace, msg);
+  }
+
+  /// 返回最近日志，供本地 HTTP 调试接口使用。
+  static List<Map<String, dynamic>> history({int limit = 200}) {
+    final safeLimit = limit.clamp(1, maxHistoryEntries).toInt();
+    final start = _history.length > safeLimit ? _history.length - safeLimit : 0;
+    return _history
+        .sublist(start)
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList(growable: false);
+  }
+
+  /// 返回适合终端查看的日志文本。
+  static List<String> historyLines({int limit = 200}) {
+    return history(limit: limit).map((entry) {
+      final time = entry['time'] ?? '';
+      final level = entry['level'] ?? '';
+      final message = entry['message'] ?? '';
+      final exception = entry['exception'];
+      final suffix = exception == null ? '' : ' | $exception';
+      return '[$time] [$level] $message$suffix';
+    }).toList(growable: false);
+  }
+
+  static void clearHistory() => _history.clear();
+
+  static void _record(
+    String level,
+    dynamic msg, [
+    Object? exception,
+    StackTrace? stackTrace,
+  ]) {
+    _history.add(<String, dynamic>{
+      'time': DateTime.now().toIso8601String(),
+      'level': level,
+      'message': msg?.toString() ?? '',
+      if (exception != null) 'exception': exception.toString(),
+      if (stackTrace != null) 'stack': stackTrace.toString(),
+    });
+    if (_history.length > maxHistoryEntries) {
+      _history.removeRange(0, _history.length - maxHistoryEntries);
+    }
   }
 
   static Logger create(List<String> prefixList) {
