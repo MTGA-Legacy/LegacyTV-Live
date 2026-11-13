@@ -35,8 +35,8 @@ dependencies:
   http: ^1.1.1
   html: ^0.15.0
   # 日志
-  talker: ^4.1.2
-  talker_flutter: ^4.1.2
+  talker: 4.1.2
+  talker_flutter: 4.1.2
   # 数据存储
   shared_preferences: ^2.2.2
   # 界面适配
