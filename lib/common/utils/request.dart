@@ -153,12 +153,12 @@ class RequestUtil {
       String url, InternetAddress address,
       {required Duration timeout}) async {
     final parsed = Uri.parse(url);
-    final httpClient = HttpClient()
-      ..findProxy = (_) => 'DIRECT'
-      ..connectionTimeout = const Duration(seconds: 8)
-      ..connectionFactory = (uri, proxyHost, proxyPort) {
-        return Socket.startConnect(address, uri.port);
-      };
+    final httpClient = HttpClient();
+    httpClient.findProxy = (_) => 'DIRECT';
+    httpClient.connectionTimeout = const Duration(seconds: 8);
+    httpClient.connectionFactory = (uri, proxyHost, proxyPort) {
+      return Socket.startConnect(address, uri.port);
+    };
     final client = io.IOClient(httpClient);
     try {
       final response = await client
