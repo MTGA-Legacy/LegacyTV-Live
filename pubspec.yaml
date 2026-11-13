@@ -23,7 +23,7 @@ dependencies:
   flutter_mobx: ^2.2.1+1
 
   # 工具
-  xml: ^6.5.0
+  xml: ^6.4.2
   collection: ^1.17.2
   json_annotation: ^4.8.1
   package_info_plus: ^4.2.0
