@@ -24,7 +24,8 @@ jobs:
       - run: flutter pub get
       - run: flutter test
       - run: flutter build apk --release --target-platform android-arm,android-arm64
+      - run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/LegacyTV.apk
       - uses: actions/upload-artifact@v4
         with:
           name: legacytv-apk
-          path: build/app/outputs/flutter-apk/LegacyTV-*.apk
+          path: build/app/outputs/flutter-apk/LegacyTV.apk
