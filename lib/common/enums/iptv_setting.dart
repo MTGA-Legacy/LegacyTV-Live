@@ -93,9 +93,20 @@ class IptvSettings {
   ///
   /// 空串 = 已禁用内置源。注意 api 变更后必须清缓存时间戳，
   /// 否则会拿旧地址的缓存继续用。
-  static String get defaultIptvSourceApi =>
-      PrefsUtil.getString(IptvSetting.defaultIptvSourceApi.toString()) ??
-      Constants.defaultIptvSourceApi;
+  static String get defaultIptvSourceApi {
+    final key = IptvSetting.defaultIptvSourceApi.toString();
+    final stored = PrefsUtil.getString(key);
+
+    // 已安装的旧版本可能保存了 HTWMedia 地址。只迁移这个历史默认值，
+    // 用户自行填写的其它地址保持不变。
+    if (stored == Constants.legacyIptvSourceApi) {
+      PrefsUtil.setString(key, Constants.defaultIptvSourceApi);
+      PrefsUtil.setInt(IptvSetting.iptvSourceCacheTime.toString(), 0);
+      return Constants.defaultIptvSourceApi;
+    }
+
+    return stored ?? Constants.defaultIptvSourceApi;
+  }
   static set defaultIptvSourceApi(String value) {
     PrefsUtil.setString(IptvSetting.defaultIptvSourceApi.toString(), value);
     PrefsUtil.setInt(IptvSetting.iptvSourceCacheTime.toString(), 0);
