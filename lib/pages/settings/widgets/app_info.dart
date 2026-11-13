@@ -97,7 +97,7 @@ class _SettingsAppInfoState extends State<SettingsAppInfo> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                'HTV',
+                'LegacyTV Live',
                 style: AppTheme.text(fg, 60.sp, weight: FontWeight.bold),
               ),
               SizedBox(width: 20.w),
@@ -122,7 +122,7 @@ class _SettingsAppInfoState extends State<SettingsAppInfo> {
           ),
         ),
         Text(
-          'https://github.com/HTWMedia/HTV',
+          'https://github.com/MTGA-Legacy/LegacyTV',
           style: AppTheme.text(AppTheme.fgFaded(context, AppTheme.oSecondary), 30.sp),
         ),
       ],
