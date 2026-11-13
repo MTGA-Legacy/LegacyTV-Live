@@ -104,6 +104,45 @@ class HttpServerUtil {
       });
     });
 
+    // 远程调试专用命名空间：后续诊断接口统一放在 /api/debug/*。
+    // 这样调试能力有固定边界，不会和用户配置接口混在一起。
+    app.get('/api/debug', (request) {
+      return _jsonResponse(<String, dynamic>{
+        'apiVersion': 1,
+        'endpoints': <String, String>{
+          'player': 'GET /api/debug/player',
+          'routes': 'GET /api/debug',
+          'logs': 'GET /api/logs?limit=200',
+          'status': 'GET /api/status',
+        },
+      });
+    });
+
+    app.get('/api/debug/player', (request) {
+      final player = GetIt.I<PlayerStore>();
+      final value = player.player.value;
+      return _jsonResponse(<String, dynamic>{
+        'decoder': player.decoderMode,
+        'hardwareDecodeEnabled': player.hardwareDecodeEnabled,
+        'hardwareDecodeFallback': player.hardwareDecodeFallback,
+        'playerState': player.state.name,
+        'nativeState': player.player.state.toString().split('.').last,
+        'dataSource': player.player.dataSource,
+        'currentUrl': player.currentUrl,
+        'isPlayback': player.isPlayback,
+        'isBuffering': player.player.isBuffering,
+        'bufferPercent': player.player.bufferPercent,
+        'currentPositionMs': player.player.currentPos.inMilliseconds,
+        'bufferPositionMs': player.player.bufferPos.inMilliseconds,
+        'videoRenderStart': value.videoRenderStart,
+        'resolution': {
+          'width': player.resolution.width,
+          'height': player.resolution.height,
+        },
+        'aspectRatio': player.aspectRatio,
+      });
+    });
+
     var handler = const shelf.Pipeline().addMiddleware(shelf.logRequests()).addHandler(app.call);
 
     var server = await io.serve(handler, InternetAddress.anyIPv4, Constants.httpServerPort);

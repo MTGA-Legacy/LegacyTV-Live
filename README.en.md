@@ -24,7 +24,7 @@ Download `LegacyTV.apk` (includes armeabi-v7a and arm64-v8a) from Releases or Ac
 - Edit or clear the default URL under **Live source → Default source service**
 - Add your own M3U/TXT subscription under **Custom live source**
 - The app keeps the previous cache when a refresh fails
-- A local debug service starts at port `10381`: use `/api/logs.txt` for plain text, `/api/logs` for JSON, and `/api/status` for player state
+- A LAN debug service starts at port `10381`: use `/api/logs.txt` for plain text, `/api/logs` for JSON, `/api/status` for player state, and `/api/debug/*` for reserved remote player diagnostics
 
 ## Build
 
