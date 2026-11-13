@@ -13,7 +13,8 @@ class _HttpOverrides extends HttpOverrides {
     'objects.githubusercontent.com',
     'dns.google',
     'cloudflare-dns.com',
-    'mirror.ghproxy.com',
+    'ghfast.top',
+    'ghproxy.net',
     'node1.olelive.com',
   };
 

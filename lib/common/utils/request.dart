@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -53,14 +54,53 @@ class RequestUtil {
     return _getDirect(url, timeout: timeout);
   }
 
+  /// 并行请求多个同一内容的入口，返回第一个通过校验的正文。
+  ///
+  /// 适合几 KB 的播放列表：并行的是入口，不是文件分片，不会增加单个
+  /// 下载的连接数。失败入口会自动收敛，全部失败时返回空串。
+  static Future<String> getFirstAvailable(
+    List<String> urls, {
+    Duration timeout = const Duration(seconds: 8),
+    bool Function(String body)? validator,
+  }) {
+    if (urls.isEmpty) return Future.value('');
+
+    final completer = Completer<String>();
+    var pending = urls.length;
+
+    for (final url in urls) {
+      _getDirect(url, timeout: timeout, retry: false).then((body) {
+        final valid = body.isNotEmpty && (validator?.call(body) ?? true);
+        if (valid) {
+          _logger.debug('候选请求成功: $url');
+          if (!completer.isCompleted) completer.complete(body);
+          return;
+        }
+
+        pending--;
+        if (pending == 0 && !completer.isCompleted) {
+          completer.complete('');
+        }
+      }).catchError((_) {
+        pending--;
+        if (pending == 0 && !completer.isCompleted) {
+          completer.complete('');
+        }
+      });
+    }
+
+    return completer.future;
+  }
+
   /// 普通请求只走系统网络；GitHub 请求额外尝试 DoH 解析和镜像。
   static Future<String> _getDirect(String url,
-      {Duration timeout = const Duration(seconds: 15)}) async {
+      {Duration timeout = const Duration(seconds: 15), bool retry = true}) async {
     http.Client? client;
     try {
       client = http.Client();
-      final response = await _r.retry(() =>
-          client!.get(Uri.parse(url), headers: _headers).timeout(timeout));
+      final request = () =>
+          client!.get(Uri.parse(url), headers: _headers).timeout(timeout);
+      final response = retry ? await _r.retry(request) : await request();
 
       if (response.statusCode == 200) {
         return utf8.decode(response.bodyBytes);

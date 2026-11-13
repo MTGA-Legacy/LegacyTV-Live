@@ -7,6 +7,7 @@
 - 支持 Android 4.4+，提供 ARM32/ARM64 通用构建
 - 默认使用 [ChinaIPTV](https://github.com/hujingguang/ChinaIPTV) 的自动更新 M3U：
   `https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8`
+- 直播源同时尝试直连、ghfast 和 ghproxy.net；网络失败时优先显示本地缓存
 - 针对 Android 4.4 的旧 CA 证书库，GitHub 上游请求使用固定域名兼容处理
 - 支持 M3U、M3U8、TVBox 文本和自定义订阅
 - 直播源失败时自动尝试同频道的备用地址

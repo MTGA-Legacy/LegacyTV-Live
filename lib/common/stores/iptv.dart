@@ -94,6 +94,15 @@ abstract class IptvStoreBase with Store {
 
   Map<String, Iptv>? _nameIndex;
 
+  /// 网络刷新锁：页面恢复、定时器和首次加载可能同时触发刷新，
+  /// 只保留一个请求，避免同一台电视并行拉三份播放列表。
+  Future<void>? _networkRefresh;
+
+  /// 网络持续不可达时的退避截止时间，避免界面每次重建都重新等待网络。
+  DateTime? _networkRetryAfter;
+
+  static const _networkRetryDelay = Duration(minutes: 10);
+
   /// 收藏的频道列表（按添加顺序；源列表中已不存在的频道会被自动过滤）
   /// 注意：这是普通 getter，依赖 favoriteNames 与 iptvList，在 Observer 中可正常响应
   List<Iptv> get favoriteIptvList {
@@ -187,26 +196,47 @@ abstract class IptvStoreBase with Store {
 
     // 2. 从未缓存过，等网络
     listStatus.value = IptvListStatus.loading;
-    final fresh = await IptvUtil.refreshAndGet();
-    listStatus.value =
-        fresh.isEmpty ? IptvListStatus.failed : IptvListStatus.ready;
-    iptvGroupList = fresh;
+    await _refreshFromNetwork();
+    if (iptvGroupList.isEmpty) {
+      listStatus.value = IptvListStatus.failed;
+    }
   }
 
-  Future<void> _refreshFromNetwork() async {
+  Future<void> _refreshFromNetwork() {
+    final pending = _networkRefresh;
+    if (pending != null) return pending;
+
+    final retryAfter = _networkRetryAfter;
+    if (retryAfter != null && DateTime.now().isBefore(retryAfter)) {
+      return Future.value();
+    }
+
+    final future = _refreshFromNetworkOnce();
+    _networkRefresh = future;
+    future.whenComplete(() {
+      if (identical(_networkRefresh, future)) _networkRefresh = null;
+    });
+    return future;
+  }
+
+  Future<void> _refreshFromNetworkOnce() async {
     try {
       final fresh = await IptvUtil.refreshAndGet();
       if (fresh.isEmpty) {
         // 后台刷新拉不到东西（网络抖动、服务端异常）时保留现有列表：
         // 原来这里无脑覆盖，一次后台失败就把用户正在看的频道池清空，
         // 界面再也不回来，直到重启 App。
+        _networkRetryAfter = DateTime.now().add(_networkRetryDelay);
         return;
       }
       runInAction(() {
         iptvGroupList = fresh;
         listStatus.value = IptvListStatus.ready;
       });
-    } catch (_) {}
+      _networkRetryAfter = null;
+    } catch (_) {
+      _networkRetryAfter = DateTime.now().add(_networkRetryDelay);
+    }
   }
 
   /// 刷新节目单（缓存优先，无缓存时立即网络获取并异步更新界面）

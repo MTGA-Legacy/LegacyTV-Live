@@ -7,6 +7,14 @@ class Constants {
   /// （清空后只加载「自定义直播源」）。改动走 Prefs，服务端接入方不需要改代码。
   static const defaultIptvSourceApi = 'https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8';
 
+  /// ChinaIPTV 的请求入口：直连与两个内容镜像同时尝试。
+  /// 镜像只代理同一个上游地址，不改变播放列表内容。
+  static const defaultIptvSourceApis = <String>[
+    defaultIptvSourceApi,
+    'https://ghfast.top/https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8',
+    'https://ghproxy.net/https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8',
+  ];
+
   /// 直播源缓存时间
   static const iptvSourceCacheKeepTime = 1000 * 60 * 60; // 1小时
 
@@ -20,7 +28,7 @@ class Constants {
   static const githubReleaseApi = 'https://api.github.com/repos/MTGA-Legacy/LegacyTV-Live/releases/latest';
 
   /// github代理加速地址
-  static const githubProxy = 'https://mirror.ghproxy.com/';
+  static const githubProxy = 'https://ghfast.top/';
 
   /// github release latest (fallback HTML 页面)
   static const githubReleaseLatest = 'https://github.com/MTGA-Legacy/LegacyTV-Live/releases/latest';

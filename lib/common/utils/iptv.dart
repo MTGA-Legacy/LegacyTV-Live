@@ -21,11 +21,18 @@ class IptvUtil {
       _logger.debug('默认源服务已停用，跳过内置源');
       return '';
     }
-    _logger.debug('获取内置直播源（ChinaIPTV）: $api');
+    final urls = api == Constants.defaultIptvSourceApi
+        ? Constants.defaultIptvSourceApis
+        : <String>[api];
+    _logger.debug('获取内置直播源（ChinaIPTV）候选: ${urls.join(' | ')}');
 
     try {
       final t2 = DateTime.now().millisecondsSinceEpoch;
-      final result = await RequestUtil.get(api);
+      final result = await RequestUtil.getFirstAvailable(
+        urls,
+        timeout: const Duration(seconds: 8),
+        validator: _isValidM3u,
+      );
       _logger.debug('请求内置直播源耗时: ${DateTime.now().millisecondsSinceEpoch - t2}ms');
       _logger.debug('获取内置直播源总耗时: ${DateTime.now().millisecondsSinceEpoch - t0}ms');
       return result;
@@ -33,6 +40,11 @@ class IptvUtil {
       _logger.handle(e, st);
       rethrow;
     }
+  }
+
+  static bool _isValidM3u(String source) {
+    final body = source.trimLeft();
+    return body.startsWith('#EXTM3U') && body.contains('#EXTINF');
   }
 
   /// 自定义源缓存是否已失效（过期或源地址已变更）
