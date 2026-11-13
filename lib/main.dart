@@ -149,7 +149,7 @@ class MyApp extends StatelessWidget {
       splitScreenMode: true,
       child: RestartWidget(
           child: MaterialApp(
-            title: 'HTV',
+            title: 'LegacyTV Live',
             theme: ThemeData(
               colorScheme: colorScheme,
             ),
