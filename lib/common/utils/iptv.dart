@@ -128,6 +128,20 @@ class IptvUtil {
     }
   }
 
+  /// 清除内置源和自定义源的本地缓存。
+  static Future<void> clearCache() async {
+    for (final file in [await _getCacheFile(), await _getCustomCacheFile()]) {
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (e, st) {
+        _logger.handle(e, st);
+      }
+    }
+    IptvSettings.iptvSourceCacheTime = 0;
+    IptvSettings.customIptvSourceCacheTime = 0;
+    IptvSettings.customIptvSourceCacheUrl = '';
+  }
+
   /// 获取已缓存的源列表（无网络请求，内置源 + 自定义源缓存合并）
   static Future<List<IptvGroup>?> getCachedGroups() async {
     final builtinCache = await _getCache();

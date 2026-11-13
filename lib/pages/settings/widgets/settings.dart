@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get_it/get_it.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
@@ -40,7 +39,7 @@ class SettingsMain extends StatefulWidget {
 
 class _SettingsMainState extends State<SettingsMain> {
   final iptvStore = GetIt.I<IptvStore>();
-  final updateStore = GetIt.I<UpdateStore>();
+  final playerStore = GetIt.I<PlayerStore>();
 
   late final List<SettingItem> _settingItemList;
 
@@ -52,6 +51,50 @@ class _SettingsMainState extends State<SettingsMain> {
     } else {
       return '${ms ~/ 3600000}小时';
     }
+  }
+
+  String _formatCacheAge(int timestamp) {
+    if (timestamp <= 0) return '无缓存';
+    final age = DateTime.now().millisecondsSinceEpoch - timestamp;
+    if (age < 60000) return '刚刚缓存';
+    if (age < 3600000) return '${age ~/ 60000}分钟前缓存';
+    return '${age ~/ 3600000}小时前缓存';
+  }
+
+  int _sourceCacheTime() {
+    final builtin = IptvSettings.iptvSourceCacheTime;
+    final custom = IptvSettings.customIptvSourceCacheTime;
+    return builtin > custom ? builtin : custom;
+  }
+
+  String _sourceStatus() {
+    switch (iptvStore.listStatus.value) {
+      case IptvListStatus.loading:
+        return '加载中';
+      case IptvListStatus.ready:
+        return '${iptvStore.iptvList.length} 个频道';
+      case IptvListStatus.failed:
+        return '加载失败';
+    }
+  }
+
+  String _sourceStatusDescription() {
+    final cached = _sourceCacheTime();
+    switch (iptvStore.listStatus.value) {
+      case IptvListStatus.loading:
+        return cached > 0 ? '正在更新，先使用 ${_formatCacheAge(cached)}' : '正在请求直播源';
+      case IptvListStatus.ready:
+        return cached > 0 ? '${_formatCacheAge(cached)}，点击刷新' : '已从网络获取，点击刷新';
+      case IptvListStatus.failed:
+        return cached > 0 ? '网络失败，仍可使用 ${_formatCacheAge(cached)}' : '没有可用直播源，点击重试';
+    }
+  }
+
+  String _serverEndpoint() {
+    final uri = Uri.tryParse(HttpServerUtil.serverUrl);
+    if (uri == null || uri.port == 0) return ':${Constants.httpServerPort}';
+    if (uri.host == '0.0.0.0') return ':${uri.port}';
+    return '${uri.host}:${uri.port}';
   }
 
   /// 电视端文本编辑弹窗
@@ -282,27 +325,29 @@ class _SettingsMainState extends State<SettingsMain> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Observer(
+      builder: (_) => SizedBox(
         height: 190.w + 20.h,
         child: TwoDimensionListView(
-        size: (rowHeight: 190.w, colWidth: 400.w),
-        scrollOffset: (row: 0, col: -1),
-        gap: (row: 20.h, col: 20.w),
-        itemCount: (
-        row: 1,
-        col: (_) => _settingItemList.length,
-        ),
-        onSelect: (position) => setState(() {
-          _settingItemList.elementAtOrNull(position.col)?.onTap();
-        }),
-        onLongSelect: (position) => setState(() {
-          _settingItemList.elementAtOrNull(position.col)?.onLongTap?.call();
-        }),
-        itemBuilder: (context, position, isSelected) {
-          final item = _settingItemList[position.col];
+          size: (rowHeight: 190.w, colWidth: 400.w),
+          scrollOffset: (row: 0, col: -1),
+          gap: (row: 20.h, col: 20.w),
+          itemCount: (
+            row: 1,
+            col: (_) => _settingItemList.length,
+          ),
+          onSelect: (position) => setState(() {
+            _settingItemList.elementAtOrNull(position.col)?.onTap();
+          }),
+          onLongSelect: (position) => setState(() {
+            _settingItemList.elementAtOrNull(position.col)?.onLongTap?.call();
+          }),
+          itemBuilder: (context, position, isSelected) {
+            final item = _settingItemList[position.col];
 
-          return _buildSettingItem(item, isSelected);
-        },
+            return _buildSettingItem(item, isSelected);
+          },
+        ),
       ),
     );
   }
@@ -313,9 +358,8 @@ class _SettingsMainState extends State<SettingsMain> {
     return Container(
       padding: const EdgeInsets.all(30).r,
       decoration: BoxDecoration(
-        color: isSelected
-            ? AppTheme.fg(context)
-            : AppTheme.bgFaded(context, 0.8),
+        // 只使用半透明色块制造基础磨砂感，不叠加模糊、渐变或阴影。
+        color: AppTheme.tileFill(context, isSelected),
         borderRadius: BorderRadius.circular(20).r,
       ),
       child: Column(
@@ -348,6 +392,40 @@ class _SettingsMainState extends State<SettingsMain> {
 
   void refreshSettingGroupList() {
     final groupList = [
+      SettingGroup(name: '运行状态', items: [
+        SettingItem(
+          title: '解码模式',
+          value: () => playerStore.decoderMode == 'software' ? '软件解码' : '硬件解码',
+          description: () => playerStore.decoderMode == 'software'
+              ? 'Android 4.4 固定使用 FFmpeg，兼容老电视'
+              : '当前使用 MediaCodec',
+          onTap: () => _showProbeResult(
+            '播放器',
+            playerStore.decoderMode == 'software'
+                ? '当前固定使用软件解码，避免厂商 MediaCodec 兼容问题'
+                : '当前使用硬件解码',
+          ),
+        ),
+        SettingItem(
+          title: '直播源状态',
+          value: _sourceStatus,
+          description: _sourceStatusDescription,
+          onTap: () {
+            iptvStore.refreshIptvList().then((_) {
+              if (mounted) setState(() {});
+            });
+          },
+        ),
+        SettingItem(
+          title: '网络策略',
+          value: () => '三路并发',
+          description: () => '直连、ghfast、ghproxy.net 同时请求，成功即用',
+          onTap: () => _showProbeResult(
+            '直播源网络策略',
+            '直连和两个内容镜像只用于获取同一份 ChinaIPTV 播放列表；失败时保留本地缓存',
+          ),
+        ),
+      ]),
       SettingGroup(name: '应用', items: [
         SettingItem(
           title: '开机自启',
@@ -379,11 +457,11 @@ class _SettingsMainState extends State<SettingsMain> {
           value: () {
             final api = IptvSettings.defaultIptvSourceApi;
             if (api.isEmpty) return '已停用';
-            return api.length > 28 ? '${api.substring(0, 28)}...' : api;
+            return api == Constants.defaultIptvSourceApi ? 'ChinaIPTV' : '自定义接口';
           },
           description: () => IptvSettings.defaultIptvSourceApi.isEmpty
               ? '当前只加载自定义源；点击重新配置，长按恢复默认'
-              : '点击编辑接口地址（清空即停用内置源）',
+              : 'ChinaIPTV 自动更新源；点击编辑，长按恢复默认',
           onTap: () => _showDefaultApiDialog(),
           onLongTap: () {
             IptvSettings.defaultIptvSourceApi = Constants.defaultIptvSourceApi;
@@ -424,9 +502,8 @@ class _SettingsMainState extends State<SettingsMain> {
           title: '自定义直播源',
           value: () => IptvSettings.customIptvSource.isNotEmpty ? '已启用' : '未启用',
           description: () {
-            if (IptvSettings.customIptvSource.isEmpty) return '点击设置订阅链接';
-            final src = IptvSettings.customIptvSource;
-            return src.length > 35 ? '${src.substring(0, 35)}...' : src;
+            if (IptvSettings.customIptvSource.isEmpty) return '点击设置 M3U、M3U8 或 TVBox 订阅';
+            return '已配置订阅；点击编辑，长按清除';
           },
           onTap: () => _showCustomSourceDialog(),
           onLongTap: () {
@@ -438,65 +515,20 @@ class _SettingsMainState extends State<SettingsMain> {
         ),
         SettingItem(
           title: '直播源缓存',
-          value: () => _formatDuration(IptvSettings.iptvSourceCacheKeepTime),
-          description: () => IptvSettings.iptvSourceCacheTime > 0 ? "已缓存(点击清除缓存)" : "未缓存",
+          value: () => _sourceCacheTime() > 0 ? '可用' : '无缓存',
+          description: () => _sourceCacheTime() > 0
+              ? '保留 ${_formatDuration(IptvSettings.iptvSourceCacheKeepTime)}；点击清除'
+              : '网络失败时无法回退；点击重新获取',
           onTap: () {
-            if (IptvSettings.iptvSourceCacheTime > 0) {
-              IptvSettings.iptvSourceCacheTime = 0;
-              iptvStore.refreshIptvList().then((_) { if (mounted) setState(() {}); });
+            if (_sourceCacheTime() > 0) {
+              IptvUtil.clearCache().then((_) {
+                if (mounted) setState(() {});
+              });
+            } else {
+              iptvStore.refreshIptvList().then((_) {
+                if (mounted) setState(() {});
+              });
             }
-          },
-        ),
-      ]),
-      SettingGroup(name: '节目单', items: [
-        SettingItem(
-          title: '节目单',
-          value: () => IptvSettings.epgEnable ? '启用' : '禁用',
-          description: () => '首次加载时可能会有跳帧风险',
-          onTap: () {
-            IptvSettings.epgEnable = !IptvSettings.epgEnable;
-            iptvStore.refreshEpgList().then((_) { if (mounted) setState(() {}); });
-          },
-        ),
-        SettingItem(
-          title: '自定义节目单',
-          value: () => IptvSettings.customEpgXml.isNotEmpty ? '已启用' : '未启用',
-          description: () => IptvSettings.customEpgXml.isNotEmpty ? '长按恢复默认' : '点击查看网址二维码',
-          onTap: () => _showServerQrcode(),
-          onLongTap: () {
-            IptvSettings.customEpgXml = '';
-            IptvSettings.epgXmlCacheTime = 0;
-            IptvSettings.epgCacheHash = 0;
-            iptvStore.refreshEpgList().then((_) { if (mounted) setState(() {}); });
-          },
-        ),
-        SettingItem(
-          title: '节目单缓存',
-          value: () => '当天',
-          description: () => IptvSettings.epgXmlCacheTime > 0 ? "已缓存(点击清除缓存)" : "未缓存",
-          onTap: () {
-            if (IptvSettings.epgXmlCacheTime > 0) {
-              IptvSettings.epgXmlCacheTime = 0;
-              IptvSettings.epgCacheHash = 0;
-              iptvStore.refreshEpgList().then((_) { if (mounted) setState(() {}); });
-            }
-          },
-        ),
-        SettingItem(
-          title: '回看诊断',
-          value: () => '偏移 ${IptvSettings.catchupUtcOffsetHours}h',
-          description: () => '点击诊断当前频道能否回看（会比对回看与直播的返回内容）；长按切换时区偏移',
-          onTap: () => _runCatchupProbe(),
-          onLongTap: () {
-            IptvSettings.catchupUtcOffsetHours =
-                IptvSettings.catchupUtcOffsetHours == 8 ? 0 : 8;
-            setState(() {});
-            ScaffoldMessenger.of(context)
-              ..clearSnackBars()
-              ..showSnackBar(SnackBar(
-                content: Text('回看时区偏移已改为 ${IptvSettings.catchupUtcOffsetHours}h'),
-                duration: const Duration(seconds: 2),
-              ));
           },
         ),
       ]),
@@ -519,12 +551,11 @@ class _SettingsMainState extends State<SettingsMain> {
           },
         ),
       ]),
-      SettingGroup(name: '更多', items: [
+      SettingGroup(name: '调试与日志', items: [
         SettingItem(
-          title: '更多设置',
-          value: () => '',
-          description: () =>
-              '配置：${HttpServerUtil.serverUrl}\n日志：${HttpServerUtil.serverUrl}/api/logs.txt',
+          title: '局域网调试',
+          value: _serverEndpoint,
+          description: () => '状态 /api/status，日志 /api/logs.txt；点击显示二维码',
           onTap: () => _showServerQrcode(),
         ),
       ]),
@@ -540,118 +571,5 @@ class _SettingsMainState extends State<SettingsMain> {
         content: Text('$title\n$detail'),
         duration: const Duration(seconds: 6),
       ));
-  }
-
-  /// 拉取播放列表正文（原始字节），用于回看与直播逐字节比对
-  Future<({int status, List<int> bytes})> _fetchPlaylist(String url) async {
-    HttpClient? client;
-    try {
-      client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-      final req =
-          await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 10));
-      final resp = await req.close().timeout(const Duration(seconds: 10));
-      final bytes = <int>[];
-      await resp.forEach(bytes.addAll);
-      return (status: resp.statusCode, bytes: bytes);
-    } catch (e) {
-      return (status: -1, bytes: const <int>[]);
-    } finally {
-      client?.close(force: true);
-    }
-  }
-
-  bool _sameBytes(List<int> a, List<int> b) {
-    if (identical(a, b)) return true;
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
-
-  /// 源类型说明，用来解释"为什么这个频道回看不可用"
-  ///
-  /// 这几条都是实测结论：给地址追加回看参数后，服务端返回的播放列表
-  /// 与直播逐字节相同，即参数被直接忽略。
-  String _sourceKind(Iptv iptv) {
-    final url = iptv.url.split(';').first.trim().toLowerCase();
-    if (url.isEmpty) return '源地址为空';
-    if (url.contains('key=txiptv') || url.contains('/tsfile/live/')) {
-      return '运营商公网转播(txiptv)，playseek 参数实测被忽略';
-    }
-    if (url.contains('cctvnews.cctv.com')) {
-      return '央视官方 HLS，lbacks 参数实测被忽略';
-    }
-    return '普通直播源，服务端未声明回看能力';
-  }
-
-  /// 回看能力探测
-  ///
-  /// 先确认源是否声明了 catchup，再用最近一个已播完的节目拼地址。
-  /// 关键一步是**与直播地址逐字节比对**：很多服务端只是忽略未知参数、
-  /// 照样返回直播列表，那时"HTTP 200"是假象，放出来的还是直播流。
-  Future<void> _runCatchupProbe() async {
-    final playerStore = GetIt.I<PlayerStore>();
-    final iptv = iptvStore.currentIptv;
-
-    if (!iptv.supportCatchup) {
-      _showProbeResult(
-        '回看不可用',
-        '${iptv.name}：${_sourceKind(iptv)}\n源数据未下发 catchup 字段，App 无法自行拼出回看地址',
-      );
-      return;
-    }
-
-    final programmes = iptvStore.getProgrammes(iptv);
-    final target = CatchupUtil.pickProbeProgramme(programmes);
-    if (target == null) {
-      _showProbeResult(
-        '没有可回看的节目',
-        programmes.isEmpty ? 'EPG 里没有 ${iptv.name}' : '${iptv.name} 今天还没有播完的节目',
-      );
-      return;
-    }
-
-    final urls =
-        CatchupUtil.buildUrls(iptv, startMs: target.start, stopMs: target.stop);
-    LoggerUtil.debug('回看探测候选: ${urls.join('  |  ')}');
-    if (urls.isEmpty) {
-      _showProbeResult('无法拼出回看地址', '${iptv.name} 的 catchup 模板为空');
-      return;
-    }
-
-    final liveUrl = iptv.url.split(';').first.trim();
-    final live = await _fetchPlaylist(liveUrl);
-
-    String? playUrl;
-    final report = <String>[];
-    for (final url in urls) {
-      final r = await _fetchPlaylist(url);
-      if (r.status < 0) {
-        report.add('请求失败（超时或不可达）');
-        continue;
-      }
-      if (r.status >= 400) {
-        report.add('HTTP ${r.status}');
-        continue;
-      }
-      if (live.status >= 0 && live.bytes.isNotEmpty && _sameBytes(live.bytes, r.bytes)) {
-        report.add('HTTP ${r.status}，但内容与直播逐字节相同 → 参数被忽略');
-        continue;
-      }
-      report.add('HTTP ${r.status} 且内容与直播不同，疑似真实录像');
-      playUrl ??= url;
-    }
-
-    if (playUrl == null) {
-      _showProbeResult('回看未生效', '《${target.title}》\n${report.join('\n')}');
-      return;
-    }
-
-    await playerStore.playCatchup(iptv, url: playUrl);
-    _showProbeResult(
-      '回看《${target.title}》已开始',
-      '按返回键观看；若画面是直播而不是片头，说明时区偏移要调',
-    );
   }
 }

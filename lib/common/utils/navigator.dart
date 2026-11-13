@@ -9,12 +9,14 @@ class NavigatorUtil {
     return Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
+        transitionDuration: const Duration(milliseconds: 160),
+        reverseTransitionDuration: const Duration(milliseconds: 120),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          // 透明渐变
+          // 保留短暂的非线性淡入，不叠加模糊、缩放或弹性效果。
           return FadeTransition(
             opacity: animation.drive(
               Tween<double>(begin: 0.0, end: 1.0).chain(
-                CurveTween(curve: Curves.easeInOut),
+                CurveTween(curve: Curves.easeOut),
               ),
             ),
             child: child,

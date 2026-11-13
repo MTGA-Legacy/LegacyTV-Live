@@ -3,7 +3,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:video_player_example/common/index.dart';
 import 'package:video_player_example/pages/settings/widgets/app_info.dart';
 import 'package:video_player_example/pages/settings/widgets/settings.dart';
-import 'package:get_it/get_it.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -13,10 +12,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final playerStore = GetIt.I<PlayerStore>();
-  final iptvStore = GetIt.I<IptvStore>();
-  final updateStore = GetIt.I<UpdateStore>();
-
   @override
   Widget build(BuildContext context) {
     // 返回方式（点空白 / ESC）与遮罩交给公共外壳处理，与 PanelPage、二维码页一致
