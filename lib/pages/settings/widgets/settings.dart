@@ -158,7 +158,7 @@ class _SettingsMainState extends State<SettingsMain> {
   void _showDefaultApiDialog() {
     _showTvTextEditDialog(
       title: '默认源服务',
-      subtitle: '留空表示停用内置源，届时只加载「自定义直播源」里填写的订阅',
+      subtitle: '默认使用 ChinaIPTV 自动更新源；留空表示只加载自定义订阅',
       hint: '输入接口地址',
       initialValue: IptvSettings.defaultIptvSourceApi,
       maxWidth: 700,
@@ -538,7 +538,7 @@ class _SettingsMainState extends State<SettingsMain> {
           onTap: () {
             _showProbeResult(
               'GitHub Discussions',
-              'github.com/HTWMedia/HTV → Discussions\n发帖时请带上：频道名 + 现象 + 地区/网络 + App 版本',
+              'github.com/MTGA-Legacy/LegacyTV → Discussions\n发帖时请带上：频道名 + 现象 + 地区/网络 + App 版本',
             );
           },
         ),
