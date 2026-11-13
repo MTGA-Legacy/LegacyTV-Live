@@ -117,8 +117,12 @@ abstract class PlayerStoreBase with Store {
   /// （例如某个源返回 404）就让整个会话一直跑 CPU 软解，直到重启 App。
   bool _hwDecodeFailed = false;
 
-  /// 连续"还没渲染出画面就失败"的次数，达到阈值才判定为硬解失败
-  static const int _hwFailThreshold = 2;
+  /// 还没渲染出首帧就失败一次时立即回退软解。
+  ///
+  /// 老电视的 MediaCodec 初始化失败通常不会带来可识别的错误码，
+  /// 而是直接进入 error；继续尝试第二个源只会让用户多等一次。
+  /// 网络错误后若软解成功，首帧回调会清除该标志，下一次播放自动恢复硬解。
+  static const int _hwFailThreshold = 1;
   int _hwDecodeErrorStreak = 0;
 
   /// 本次播放是否已经渲染出画面。
