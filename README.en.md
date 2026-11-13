@@ -4,7 +4,7 @@ A lightweight IPTV player for Android 4.4+ TVs and TV boxes.
 
 ## Features
 
-- Android 4.4+ support, including an `armeabi-v7a` build
+- Android 4.4+ support, including an ARM32/ARM64 universal build
 - Uses the auto-updating [ChinaIPTV](https://github.com/hujingguang/ChinaIPTV) M3U by default:
   `https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8`
 - Supports M3U/M3U8, TVBox text playlists, and custom subscriptions
@@ -16,7 +16,7 @@ ChinaIPTV maintains the playlist upstream. This repository references the remote
 
 ## Install
 
-Download `LegacyTV-<version>-armeabi-v7a.apk` from Releases and install it through USB, a file manager, or ADB. The original application ID `com.htwmedia.htv` is retained so an existing HTV installation can be upgraded.
+Download `LegacyTV-<version>.apk` (includes armeabi-v7a and arm64-v8a) from Releases and install it through USB, a file manager, or ADB. The original application ID `com.htwmedia.htv` is retained so an existing HTV installation can be upgraded.
 
 ## Settings
 
