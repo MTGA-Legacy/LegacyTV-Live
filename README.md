@@ -4,7 +4,7 @@
 
 ## 特性
 
-- 支持 Android 4.4+，提供 `armeabi-v7a` 架构构建
+- 支持 Android 4.4+，提供 ARM32/ARM64 通用构建
 - 默认使用 [ChinaIPTV](https://github.com/hujingguang/ChinaIPTV) 的自动更新 M3U：
   `https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8`
 - 支持 M3U、M3U8、TVBox 文本和自定义订阅
@@ -16,7 +16,7 @@ ChinaIPTV 播放列表由上游项目定期更新，本仓库只引用远程地�
 
 ## 安装
 
-从 Releases 下载 `LegacyTV-<版本>-armeabi-v7a.apk`，通过 U 盘、文件管理器或 ADB 安装。应用仍保留原 applicationId `com.htwmedia.htv`，方便覆盖已有 HTV 安装。
+从 Releases 下载 `LegacyTV-<版本>.apk`（包含 armeabi-v7a 与 arm64-v8a），通过 U 盘、文件管理器或 ADB 安装。应用仍保留原 applicationId `com.htwmedia.htv`，方便覆盖已有 HTV 安装。
 
 ## 设置
 
