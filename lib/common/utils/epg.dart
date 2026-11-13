@@ -14,9 +14,10 @@ class EpgUtil {
 
   /// 获取远程epg xml
   static Future<String> _fetchXml() async {
+    // ChinaIPTV 播放列表没有统一 EPG 地址，未配置时直接跳过网络请求。
+    if (Constants.iptvEpgXml.isEmpty) return '';
     _logger.debug('获取远程xml: ${Constants.iptvEpgXml}');
-    final result = await RequestUtil.get(Constants.iptvEpgXml);
-    return result;
+    return RequestUtil.get(Constants.iptvEpgXml);
   }
 
   /// 获取缓存epg xml文件
