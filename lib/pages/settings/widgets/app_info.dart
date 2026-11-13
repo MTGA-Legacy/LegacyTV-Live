@@ -122,7 +122,7 @@ class _SettingsAppInfoState extends State<SettingsAppInfo> {
           ),
         ),
         Text(
-          'https://github.com/MTGA-Legacy/LegacyTV',
+          'https://github.com/MTGA-Legacy/LegacyTV-Live',
           style: AppTheme.text(AppTheme.fgFaded(context, AppTheme.oSecondary), 30.sp),
         ),
       ],

@@ -17,13 +17,13 @@ class Constants {
   static const epgRefreshTimeThreshold = 6; // 不到6点不刷新
 
   /// github API 获取最新 release
-  static const githubReleaseApi = 'https://api.github.com/repos/MTGA-Legacy/LegacyTV/releases/latest';
+  static const githubReleaseApi = 'https://api.github.com/repos/MTGA-Legacy/LegacyTV-Live/releases/latest';
 
   /// github代理加速地址
   static const githubProxy = 'https://mirror.ghproxy.com/';
 
   /// github release latest (fallback HTML 页面)
-  static const githubReleaseLatest = 'https://github.com/MTGA-Legacy/LegacyTV/releases/latest';
+  static const githubReleaseLatest = 'https://github.com/MTGA-Legacy/LegacyTV-Live/releases/latest';
 
   /// 设置服务器端口
   static const httpServerPort = 10381;

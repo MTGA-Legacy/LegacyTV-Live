@@ -514,7 +514,7 @@ class _SettingsMainState extends State<SettingsMain> {
           onTap: () {
             _showProbeResult(
               'GitHub Discussions',
-              'github.com/MTGA-Legacy/LegacyTV → Discussions\n发帖时请带上：频道名 + 现象 + 地区/网络 + App 版本',
+              'github.com/MTGA-Legacy/LegacyTV-Live → Discussions\n发帖时请带上：频道名 + 现象 + 地区/网络 + App 版本',
             );
           },
         ),
