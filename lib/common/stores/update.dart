@@ -144,7 +144,7 @@ abstract class UpdateStoreBase with Store {
 
     try {
       final dir = await getTemporaryDirectory();
-      final savePath = '${dir.path}/htv-${latestRelease.tagName}.apk';
+      final savePath = '${dir.path}/legacytv-${latestRelease.tagName}.apk';
 
       // 通过代理加速下载
       var downloadUrl = '${Constants.githubProxy}${latestRelease.downloadUrl}';
