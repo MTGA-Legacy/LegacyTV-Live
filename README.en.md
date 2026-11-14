@@ -7,13 +7,14 @@ A lightweight IPTV player for Android 4.4+ TVs and TV boxes.
 - Android 4.4+ support, including an ARM32/ARM64 universal build
 - Uses the auto-updating [ChinaIPTV](https://github.com/hujingguang/ChinaIPTV) M3U by default:
   `https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8`
+- Also merges `cn_all.m3u8` from [best-fan/iptv-sources](https://github.com/best-fan/iptv-sources) as a backup playlist
 - Tries direct, ghfast, and ghproxy.net source endpoints in parallel, with cached playback when the network is unavailable
 - GitHub upstream requests include a fixed-host compatibility path for Android 4.4 CA stores
 - Supports M3U/M3U8, TVBox text playlists, and custom subscriptions
 - Automatically tries another URL for a channel when playback fails
 - D-pad, number-key, and OK-key navigation for TV remotes
 - Software decoding is enabled by default on Android 4.4 to avoid unstable vendor MediaCodec implementations
-- No ads or account; the default ChinaIPTV playlist does not enable third-party EPG
+- No ads or account; the guide uses a separate XMLTV source matched by channel name
 
 ChinaIPTV maintains the playlist upstream. This repository references the remote playlist and does not copy channel data. Availability depends on the TV network and the upstream playlist status.
 
@@ -25,6 +26,7 @@ Download `LegacyTV.apk` (includes armeabi-v7a and arm64-v8a) from Releases or Ac
 
 - **Runtime status** shows software decoding, source loading, and cache state
 - Edit or clear the default URL under **Live source → Default source service**
+- **Program guide** uses a separate lightweight XMLTV source with a toggle and cache clearing
 - Add your own M3U/TXT subscription under **Custom live source**
 - The app keeps the previous cache when a refresh fails
 - **Debug and logs → LAN debug** shows the address and QR code. A LAN debug service starts at port `10381`: use `/api/logs.txt` for plain text, `/api/logs` for JSON, `/api/status` for player state, and `/api/debug/*` for reserved remote player diagnostics

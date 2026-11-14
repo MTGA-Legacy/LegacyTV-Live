@@ -15,11 +15,28 @@ class Constants {
     'https://ghproxy.net/https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8',
   ];
 
+  /// 第二个内置列表：用于补充 ChinaIPTV 缺失或失效的频道地址。
+  static const backupIptvSourceApi =
+      'https://raw.githubusercontent.com/best-fan/iptv-sources/main/cn_all.m3u8';
+
+  /// 备用列表同样支持直连与两个内容镜像。
+  static const backupIptvSourceApis = <String>[
+    backupIptvSourceApi,
+    'https://ghfast.top/https://raw.githubusercontent.com/best-fan/iptv-sources/main/cn_all.m3u8',
+    'https://ghproxy.net/https://raw.githubusercontent.com/best-fan/iptv-sources/main/cn_all.m3u8',
+  ];
+
   /// 直播源缓存时间
   static const iptvSourceCacheKeepTime = 1000 * 60 * 60; // 1小时
 
+  /// 内置源从单列表升级为 ChinaIPTV + best-fan 双列表。
+  static const iptvSourceCacheVersion = 2;
+
   /// epg xml
-  static const iptvEpgXml = ''; // ChinaIPTV 播放列表不附带统一 EPG，默认关闭远程 EPG 请求
+  /// XMLTV 节目单。播放列表本身没有统一 EPG，所以使用独立的轻量聚合源。
+  /// 该地址位于 GitHub，RequestUtil 会自动应用 Android 4.4 的直连、DoH 与镜像回退。
+  static const iptvEpgXml =
+      'https://raw.githubusercontent.com/peterHchina/iptv/main/EPG.xml';
 
   /// epg 刷新时间阈值（小时）
   static const epgRefreshTimeThreshold = 6; // 不到6点不刷新

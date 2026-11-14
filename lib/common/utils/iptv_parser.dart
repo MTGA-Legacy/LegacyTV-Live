@@ -44,9 +44,16 @@ Future<List<IptvGroup>> parseM3uSource(String source) async {
       continue;
     }
 
+    // 列表更新时偶尔会留下缺少频道名或播放地址的半条记录；跳过该条，
+    // 不让一个坏行导致整份 M3U 解析失败。
+    final commaIndex = line.indexOf(',');
+    if (commaIndex < 0 || lineIdx + 1 >= lines.length) continue;
+    final name = line.substring(commaIndex + 1).trim();
+    final url = lines[lineIdx + 1].trim();
+    if (name.isEmpty || url.isEmpty) continue;
+
     final groupName = RegExp('group-title="(.*?)"').firstMatch(line)?.group(
         1) ?? '其他';
-    final name = line.split(',')[1];
 
     final group = groupList.firstWhere((it) => it.name == groupName,
         orElse: () {
@@ -64,7 +71,7 @@ Future<List<IptvGroup>> parseM3uSource(String source) async {
       channel: ++channel,
       groupIdx: group.idx,
       name: name,
-      url: lines[lineIdx + 1],
+      url: url,
       tvgName: RegExp('tvg-name="(.*?)"').firstMatch(line)?.group(1) ?? name,
       catchup: catchupInfo.type,
       catchupSource: catchupInfo.source,

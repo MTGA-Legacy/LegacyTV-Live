@@ -419,10 +419,10 @@ class _SettingsMainState extends State<SettingsMain> {
         SettingItem(
           title: '网络策略',
           value: () => '三路并发',
-          description: () => '直连、ghfast、ghproxy.net 同时请求，成功即用',
+          description: () => '直连、ghfast、ghproxy.net；播放失败自动换同频道备用地址',
           onTap: () => _showProbeResult(
             '直播源网络策略',
-            '直连和两个内容镜像只用于获取同一份 ChinaIPTV 播放列表；失败时保留本地缓存',
+            'ChinaIPTV 和 best-fan 分别通过直连与内容镜像获取，再合并同名频道；失败时保留本地缓存',
           ),
         ),
       ]),
@@ -457,11 +457,11 @@ class _SettingsMainState extends State<SettingsMain> {
           value: () {
             final api = IptvSettings.defaultIptvSourceApi;
             if (api.isEmpty) return '已停用';
-            return api == Constants.defaultIptvSourceApi ? 'ChinaIPTV' : '自定义接口';
+            return api == Constants.defaultIptvSourceApi ? '双列表' : '自定义接口';
           },
           description: () => IptvSettings.defaultIptvSourceApi.isEmpty
               ? '当前只加载自定义源；点击重新配置，长按恢复默认'
-              : 'ChinaIPTV 自动更新源；点击编辑，长按恢复默认',
+              : 'ChinaIPTV 主列表 + best-fan 备用列表；点击编辑，长按恢复默认',
           onTap: () => _showDefaultApiDialog(),
           onLongTap: () {
             IptvSettings.defaultIptvSourceApi = Constants.defaultIptvSourceApi;
@@ -529,6 +529,45 @@ class _SettingsMainState extends State<SettingsMain> {
                 if (mounted) setState(() {});
               });
             }
+          },
+        ),
+      ]),
+      SettingGroup(name: '节目单', items: [
+        SettingItem(
+          title: '节目单',
+          value: () => IptvSettings.epgEnable ? '启用' : '停用',
+          description: () => IptvSettings.epgEnable
+              ? '使用独立 XMLTV 源，按频道名匹配直播列表'
+              : '已停用；点击重新启用节目单',
+          onTap: () {
+            IptvSettings.epgEnable = !IptvSettings.epgEnable;
+            iptvStore.refreshEpgList().then((_) {
+              if (mounted) setState(() {});
+            });
+          },
+        ),
+        SettingItem(
+          title: '节目单来源',
+          value: () => 'peterHchina',
+          description: () => '轻量 XMLTV 聚合源；点击查看说明',
+          onTap: () => _showProbeResult(
+            '节目单来源',
+            'peterHchina/iptv 的 EPG.xml，当前列表地址已验证可访问；频道名会做 CCTV 等常见写法匹配',
+          ),
+        ),
+        SettingItem(
+          title: '节目单缓存',
+          value: () => IptvSettings.epgXmlCacheTime > 0 ? '可用' : '无缓存',
+          description: () => IptvSettings.epgXmlCacheTime > 0
+              ? '当天缓存；点击清除并重新获取'
+              : '首次打开节目单时获取 XMLTV',
+          onTap: () {
+            EpgUtil.clearCache().then((_) {
+              if (mounted) {
+                iptvStore.refreshEpgList();
+                setState(() {});
+              }
+            });
           },
         ),
       ]),

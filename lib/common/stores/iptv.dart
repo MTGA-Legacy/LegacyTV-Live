@@ -179,7 +179,8 @@ abstract class IptvStoreBase with Store {
   @action
   Future<void> refreshIptvList() async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final builtinExpired = now - IptvSettings.iptvSourceCacheTime >= IptvSettings.iptvSourceCacheKeepTime;
+    final builtinExpired = IptvSettings.iptvSourceCacheVersion != Constants.iptvSourceCacheVersion ||
+        now - IptvSettings.iptvSourceCacheTime >= IptvSettings.iptvSourceCacheKeepTime;
     final customStale = IptvSettings.customIptvSource.isNotEmpty && IptvUtil.isCustomSourceCacheStale();
     final expired = builtinExpired || customStale;
 
@@ -242,13 +243,19 @@ abstract class IptvStoreBase with Store {
   /// 刷新节目单（缓存优先，无缓存时立即网络获取并异步更新界面）
   @action
   Future<void> refreshEpgList() async {
+    if (!IptvSettings.epgEnable) {
+      epgList = [];
+      _epgMap = {};
+      return;
+    }
+
     final channels = iptvList.map((e) => e.tvgName).toList();
 
     // Phase 1: 立即从缓存获取
     final cached = await EpgUtil.getCachedOnly(channels);
     if (cached != null && cached.isNotEmpty) {
       epgList = cached;
-      _epgMap = {for (var epg in cached) epg.channel: epg};
+      _epgMap = _indexEpg(cached);
     }
 
     // Phase 2: 异步从网络获取最新数据，完成后自动更新UI
@@ -256,10 +263,19 @@ abstract class IptvStoreBase with Store {
       if (freshList.isNotEmpty) {
         runInAction(() {
           epgList = freshList;
-          _epgMap = {for (var epg in freshList) epg.channel: epg};
+          _epgMap = _indexEpg(freshList);
         });
       }
     });
+  }
+
+  Map<String, Epg> _indexEpg(List<Epg> list) {
+    final result = <String, Epg>{};
+    for (final epg in list) {
+      result[epg.channel] = epg;
+      result[normalizeEpgChannelName(epg.channel)] = epg;
+    }
+    return result;
   }
 
   /// 手动输入频道号
@@ -311,7 +327,10 @@ abstract class IptvStoreBase with Store {
   /// 指定频道的节目单（含已播出的往期节目，回看列表要用）
   List<EpgProgramme> getProgrammes(Iptv iptv) {
     epgList; // 建立 MobX 反应依赖
-    return _epgMap[iptv.tvgName]?.programmes ?? const [];
+    final epg = _epgMap[iptv.tvgName] ??
+        _epgMap[normalizeEpgChannelName(iptv.tvgName)] ??
+        _epgMap[normalizeEpgChannelName(iptv.name)];
+    return epg?.programmes ?? const [];
   }
 
   // 获取节目单
@@ -319,7 +338,9 @@ abstract class IptvStoreBase with Store {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     epgList; // 建立 MobX 反应依赖
-    final epg = _epgMap[iptv.tvgName];
+    final epg = _epgMap[iptv.tvgName] ??
+        _epgMap[normalizeEpgChannelName(iptv.tvgName)] ??
+        _epgMap[normalizeEpgChannelName(iptv.name)];
 
     final currentProgramme = epg?.programmes.firstWhereOrNull((element) => element.start <= now && element.stop >= now);
     final nextProgramme = epg?.programmes.firstWhereOrNull((element) => element.start > now);

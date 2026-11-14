@@ -17,6 +17,9 @@ enum IptvSetting {
   /// 直播源缓存保持时间
   iptvSourceCacheKeepTime,
 
+  /// 内置直播列表缓存格式版本
+  iptvSourceCacheVersion,
+
   /// 自定义直播源
   customIptvSource,
 
@@ -80,6 +83,11 @@ class IptvSettings {
       PrefsUtil.getInt(IptvSetting.iptvSourceCacheKeepTime.toString()) ?? Constants.iptvSourceCacheKeepTime;
   static set iptvSourceCacheKeepTime(int value) =>
       PrefsUtil.setInt(IptvSetting.iptvSourceCacheKeepTime.toString(), value);
+
+  static int get iptvSourceCacheVersion =>
+      PrefsUtil.getInt(IptvSetting.iptvSourceCacheVersion.toString()) ?? 0;
+  static set iptvSourceCacheVersion(int value) =>
+      PrefsUtil.setInt(IptvSetting.iptvSourceCacheVersion.toString(), value);
 
   static String get customIptvSource => PrefsUtil.getString(IptvSetting.customIptvSource.toString()) ?? '';
   static set customIptvSource(String value) {

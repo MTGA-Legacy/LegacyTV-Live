@@ -8,13 +8,24 @@ import 'package:xml/xml.dart';
 
 final _logger = LoggerUtil.create(['epg']);
 
+/// 统一节目单和 M3U 中常见的频道写法。
+/// 例如 `CCTV-4 中文国际`、`CCTV4`、`CCTV4（高清）` 应能命中同一条节目单。
+String normalizeEpgChannelName(String value) {
+  final normalized = value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s\-_－—:：·.]'), '')
+      .replaceAll(RegExp(r'[（(].*?[）)]'), '');
+  final cctv = RegExp(r'^cctv(\d{1,2}(?:\+|k)?)').firstMatch(normalized);
+  return cctv == null ? normalized : 'cctv${cctv.group(1)}';
+}
+
 /// 节目单工具
 class EpgUtil {
   EpgUtil._();
 
   /// 获取远程epg xml
   static Future<String> _fetchXml() async {
-    // ChinaIPTV 播放列表没有统一 EPG 地址，未配置时直接跳过网络请求。
+    // ChinaIPTV 和 best-fan 播放列表没有统一 EPG 地址，使用 Constants 中的独立 XMLTV 源。
     if (Constants.iptvEpgXml.isEmpty) return '';
     _logger.debug('获取远程xml: ${Constants.iptvEpgXml}');
     return RequestUtil.get(Constants.iptvEpgXml);
@@ -123,6 +134,19 @@ class EpgUtil {
     }
   }
 
+  /// 清除 XML 和解析后的节目单缓存。
+  static Future<void> clearCache() async {
+    for (final file in [await _getCacheXmlFile(), await _getCacheFile()]) {
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (e, st) {
+        _logger.handle(e, st);
+      }
+    }
+    IptvSettings.epgXmlCacheTime = 0;
+    IptvSettings.epgCacheHash = 0;
+  }
+
   /// 仅从缓存获取epg（无网络请求）
   static Future<List<Epg>?> getCachedOnly(List<String> filteredChannels) async {
     if (!IptvSettings.epgEnable) return null;
@@ -185,6 +209,8 @@ List<Epg> _parseEpgInIsolate(List<dynamic> message) {
   // 转 Set 再过滤：EPG 里的 <programme> 通常是几万到几十万量级，
   // 用 List.contains 会让整次解析退化成 O(n·m)。
   final channelSet = filteredChannels.toSet();
+  final normalizedChannelSet =
+      filteredChannels.map(normalizeEpgChannelName).toSet();
 
   final epgMap = <String, Epg>{};
   tvEl?.childElements.forEach((el) {
@@ -193,7 +219,8 @@ List<Epg> _parseEpgInIsolate(List<dynamic> message) {
     if (id != null) {
       final channelName = el.getElement('display-name')?.innerText ?? '';
 
-      if (channelSet.contains(channelName)) {
+      if (channelSet.contains(channelName) ||
+          normalizedChannelSet.contains(normalizeEpgChannelName(channelName))) {
         epgMap[id] = Epg(channel: channelName, programmes: []);
       }
     } else {

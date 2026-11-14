@@ -10,7 +10,22 @@ final _logger = LoggerUtil.create(['iptv']);
 class IptvUtil {
   IptvUtil._();
 
-  /// 获取内置远程直播源
+  /// 获取一份内置远程直播列表。
+  static Future<String> _fetchBuiltinSourcePart(
+      String name, List<String> urls) async {
+    _logger.debug('获取内置直播源候选（$name）: ${urls.join(' | ')}');
+    return RequestUtil.getFirstAvailable(
+      urls,
+      timeout: const Duration(seconds: 8),
+      validator: _isValidM3u,
+    );
+  }
+
+  /// 获取内置远程直播源。
+  ///
+  /// ChinaIPTV 和 best-fan 都是包含大量频道地址的 M3U 列表，先分别取得
+  /// 列表正文，再合并后按频道名去重。两个列表的请求并行执行，一份暂时不可达
+  /// 时仍可使用另一份。
   static Future<String> _fetchBuiltinSource() async {
     final t0 = DateTime.now().millisecondsSinceEpoch;
 
@@ -21,18 +36,16 @@ class IptvUtil {
       _logger.debug('默认源服务已停用，跳过内置源');
       return '';
     }
-    final urls = api == Constants.defaultIptvSourceApi
-        ? Constants.defaultIptvSourceApis
-        : <String>[api];
-    _logger.debug('获取内置直播源（ChinaIPTV）候选: ${urls.join(' | ')}');
-
     try {
       final t2 = DateTime.now().millisecondsSinceEpoch;
-      final result = await RequestUtil.getFirstAvailable(
-        urls,
-        timeout: const Duration(seconds: 8),
-        validator: _isValidM3u,
-      );
+      final parts = api == Constants.defaultIptvSourceApi
+          ? await Future.wait(<Future<String>>[
+              _fetchBuiltinSourcePart('ChinaIPTV', Constants.defaultIptvSourceApis),
+              _fetchBuiltinSourcePart('best-fan 备用列表', Constants.backupIptvSourceApis),
+            ])
+          : <String>[await _fetchBuiltinSourcePart('自定义默认源', <String>[api])];
+      final validParts = parts.where((source) => source.isNotEmpty).toList();
+      final result = _combineM3uSources(validParts);
       _logger.debug('请求内置直播源耗时: ${DateTime.now().millisecondsSinceEpoch - t2}ms');
       _logger.debug('获取内置直播源总耗时: ${DateTime.now().millisecondsSinceEpoch - t0}ms');
       return result;
@@ -45,6 +58,19 @@ class IptvUtil {
   static bool _isValidM3u(String source) {
     final body = source.trimLeft();
     return body.startsWith('#EXTM3U') && body.contains('#EXTINF');
+  }
+
+  /// 合并多个 M3U 播放列表，保留各列表中的频道行和地址。
+  static String _combineM3uSources(List<String> sources) {
+    if (sources.isEmpty) return '';
+    final lines = <String>['#EXTM3U'];
+    for (final source in sources) {
+      for (final line in source.split(RegExp(r'\r?\n'))) {
+        if (line.trim().isEmpty || line.trimLeft().startsWith('#EXTM3U')) continue;
+        lines.add(line);
+      }
+    }
+    return '${lines.join('\n')}\n';
   }
 
   /// 自定义源缓存是否已失效（过期或源地址已变更）
@@ -138,6 +164,7 @@ class IptvUtil {
       }
     }
     IptvSettings.iptvSourceCacheTime = 0;
+    IptvSettings.iptvSourceCacheVersion = 0;
     IptvSettings.customIptvSourceCacheTime = 0;
     IptvSettings.customIptvSourceCacheUrl = '';
   }
@@ -207,9 +234,10 @@ class IptvUtil {
     return groups.expand((g) => g.list.map((i) => i.name)).toList();
   }
 
-  /// 同名频道去重合并（保留首次出现的频道，url 用 ; 连接）
+  /// 同名频道去重合并（保留首次出现的频道，url 用 ; 连接）。
+  /// 同一地址重复出现在多个列表时只保留一份，减少老电视的内存和无效重试。
   static List<IptvGroup> _mergeDuplicateChannels(List<IptvGroup> groups) {
-    final nameToUrls = <String, String>{};
+    final nameToUrls = <String, List<String>>{};
     final nameToGroupIdx = <String, ({int groupIdx, int idx})>{};
     final result = <IptvGroup>[];
 
@@ -218,9 +246,18 @@ class IptvUtil {
       for (var i = 0; i < group.list.length; i++) {
         final iptv = group.list[i];
         if (nameToUrls.containsKey(iptv.name)) {
-          nameToUrls[iptv.name] = '${nameToUrls[iptv.name]};${iptv.url}';
+          final urls = nameToUrls[iptv.name]!;
+          for (final url in iptv.url.split(';')) {
+            final trimmed = url.trim();
+            if (trimmed.isNotEmpty && !urls.contains(trimmed)) urls.add(trimmed);
+          }
         } else {
-          nameToUrls[iptv.name] = iptv.url;
+          nameToUrls[iptv.name] = iptv.url
+              .split(';')
+              .map((url) => url.trim())
+              .where((url) => url.isNotEmpty)
+              .toSet()
+              .toList();
           nameToGroupIdx[iptv.name] = (groupIdx: group.idx, idx: i);
         }
       }
@@ -239,7 +276,7 @@ class IptvUtil {
             channel: 0,
             groupIdx: group.idx,
             name: iptv.name,
-            url: nameToUrls[iptv.name]!,
+            url: nameToUrls[iptv.name]!.join(';'),
             tvgName: iptv.tvgName,
             catchup: iptv.catchup,
             catchupSource: iptv.catchupSource,
@@ -327,7 +364,8 @@ class IptvUtil {
 
     // 1. 获取内置源（缓存优先）
     String builtinSource = '';
-    if (t0 - IptvSettings.iptvSourceCacheTime < IptvSettings.iptvSourceCacheKeepTime) {
+    if (IptvSettings.iptvSourceCacheVersion == Constants.iptvSourceCacheVersion &&
+        t0 - IptvSettings.iptvSourceCacheTime < IptvSettings.iptvSourceCacheKeepTime) {
       final cache = await _getCache();
       if (cache.isNotEmpty) {
         _logger.debug('使用缓存直播源');
@@ -341,6 +379,7 @@ class IptvUtil {
         final cacheFile = await _getCacheFile();
         await cacheFile.writeAsString(source);
         IptvSettings.iptvSourceCacheTime = t0;
+        IptvSettings.iptvSourceCacheVersion = Constants.iptvSourceCacheVersion;
         builtinSource = source;
       }
     }
