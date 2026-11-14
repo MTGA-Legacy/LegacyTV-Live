@@ -20,7 +20,12 @@ ChinaIPTV maintains the playlist upstream. This repository references the remote
 
 ## Install
 
-Download `LegacyTV.apk` (includes armeabi-v7a and arm64-v8a) from Releases or Actions artifacts and install it through USB, a file manager, or ADB. The original application ID `com.htwmedia.htv` is retained so an existing HTV installation can be upgraded.
+Download the APK matching the device ABI from Releases or Actions artifacts and install it through USB or a file manager:
+
+- 32-bit Android TV/API 19: `LegacyTV-arm32.apk`, containing only `armeabi-v7a`
+- 64-bit Android TV: `LegacyTV-arm64.apk`, containing only `arm64-v8a`
+
+The original application ID `com.htwmedia.htv` is retained so an existing HTV installation can be upgraded.
 
 ## Settings
 

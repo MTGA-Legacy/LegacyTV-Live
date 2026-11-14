@@ -109,8 +109,10 @@ android {
     }
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
-            def apkName = "LegacyTV-${variant.versionName}"
-            outputFileName = new File(apkName + ".apk")
+            // split-per-abi 产物必须保留 ABI 后缀，否则两个 APK 会互相覆盖。
+            def abi = output.getFilter(com.android.build.OutputFile.ABI)
+            def abiSuffix = abi ? "-${abi}" : ""
+            outputFileName = "LegacyTV-${variant.versionName}${abiSuffix}.apk"
         }
     }
 }

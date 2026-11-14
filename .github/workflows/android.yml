@@ -23,9 +23,31 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter test
-      - run: flutter build apk --release --target-platform android-arm,android-arm64
-      - run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/LegacyTV.apk
+      # 分 ABI 输出：老电视安装 arm32 包时不会携带 arm64-v8a 原生库。
+      - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+      - name: Rename and verify ABI APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          output_dir="build/app/outputs/flutter-apk"
+
+          # Flutter 会把版本名写入 Gradle；用 glob 兼容版本名变化。
+          arm32_source=$(find "$output_dir" -maxdepth 1 -name 'LegacyTV-*-armeabi-v7a.apk' -print -quit)
+          arm64_source=$(find "$output_dir" -maxdepth 1 -name 'LegacyTV-*-arm64-v8a.apk' -print -quit)
+          test -n "$arm32_source"
+          test -n "$arm64_source"
+          cp "$arm32_source" "$output_dir/LegacyTV-arm32.apk"
+          cp "$arm64_source" "$output_dir/LegacyTV-arm64.apk"
+
+          if unzip -l "$output_dir/LegacyTV-arm32.apk" | grep -q 'lib/arm64-v8a/'; then
+            echo 'arm32 APK unexpectedly contains arm64-v8a libraries' >&2
+            exit 1
+          fi
+          unzip -l "$output_dir/LegacyTV-arm32.apk" | grep -q 'lib/armeabi-v7a/libijkplayer.so'
+          unzip -l "$output_dir/LegacyTV-arm64.apk" | grep -q 'lib/arm64-v8a/libijkplayer.so'
       - uses: actions/upload-artifact@v4
         with:
-          name: legacytv-apk
-          path: build/app/outputs/flutter-apk/LegacyTV.apk
+          name: legacytv-apks
+          path: |
+            build/app/outputs/flutter-apk/LegacyTV-arm32.apk
+            build/app/outputs/flutter-apk/LegacyTV-arm64.apk

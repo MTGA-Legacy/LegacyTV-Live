@@ -21,7 +21,12 @@ ChinaIPTV 播放列表由上游项目定期更新，本仓库只引用远程地�
 
 ## 安装
 
-从 Releases 或 Actions artifact 下载 `LegacyTV.apk`（包含 armeabi-v7a 与 arm64-v8a），通过 U 盘、文件管理器或 ADB 安装。应用仍保留原 applicationId `com.htwmedia.htv`，方便覆盖已有 HTV 安装。
+从 Releases 或 Actions artifact 下载对应 ABI 的 APK，通过 U 盘或文件管理器安装：
+
+- 海信 Android 4.4/API19 等 32 位电视：`LegacyTV-arm32.apk`，只包含 `armeabi-v7a` 原生库
+- 64 位设备：`LegacyTV-arm64.apk`，只包含 `arm64-v8a` 原生库
+
+应用仍保留原 applicationId `com.htwmedia.htv`，方便覆盖已有 HTV 安装。
 
 ## 设置
 
