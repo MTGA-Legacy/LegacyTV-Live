@@ -31,11 +31,10 @@ jobs:
           set -euo pipefail
           output_dir="build/app/outputs/flutter-apk"
 
-          # Flutter 会把版本名写入 Gradle；用 glob 兼容版本名变化。
-          arm32_source=$(find "$output_dir" -maxdepth 1 -name 'LegacyTV-*-armeabi-v7a.apk' -print -quit)
-          arm64_source=$(find "$output_dir" -maxdepth 1 -name 'LegacyTV-*-arm64-v8a.apk' -print -quit)
-          test -n "$arm32_source"
-          test -n "$arm64_source"
+          arm32_source="$output_dir/app-armeabi-v7a-release.apk"
+          arm64_source="$output_dir/app-arm64-v8a-release.apk"
+          test -f "$arm32_source"
+          test -f "$arm64_source"
           cp "$arm32_source" "$output_dir/LegacyTV-arm32.apk"
           cp "$arm64_source" "$output_dir/LegacyTV-arm64.apk"
 
