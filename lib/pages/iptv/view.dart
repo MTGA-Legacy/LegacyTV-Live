@@ -48,6 +48,9 @@ class _IptvPageState extends State<IptvPage> with WidgetsBindingObserver {
   /// 面，不必每次进这个台都把前面几条死源重新踩一遍起播超时（默认 12s/条）。
   final Set<String> _triedSources = {};
   int _switchAttempts = 0;
+  bool _switchingSource = false;
+  bool _sourceSwitchPending = false;
+  int _channelSelectionGeneration = 0;
 
   @override
   void initState() {
@@ -146,92 +149,128 @@ class _IptvPageState extends State<IptvPage> with WidgetsBindingObserver {
   /// 单源也要留几次重试机会。
   static const int _singleSourceMaxAttempts = 3;
 
+  /// 播放器事件可能在一次切源尚未返回时重复到达。
+  /// 把这些回调合并成至多一次后续切源，避免失败事件同步重入并耗尽源列表。
+  void _requestNextAvailableSource() {
+    if (!mounted) return;
+    if (_switchingSource) {
+      _sourceSwitchPending = true;
+      return;
+    }
+    unawaited(_switchToNextAvailableSource());
+  }
+
   Future<void> _switchToNextAvailableSource() async {
-    // 防止 error 和 freeze 同时触发导致双重切源
-    if (playerStore.isSwitching) return;
+    // 用页面自己的锁：PlayerStore.isSwitching 也表示播放器缓冲阶段，
+    // 且 prepared 事件可能在本方法 await 期间将它提前清除。
+    if (_switchingSource) {
+      _sourceSwitchPending = true;
+      return;
+    }
+    _switchingSource = true;
+    final generation = _channelSelectionGeneration;
     playerStore.isSwitching = true;
 
-    // 源串里夹杂空片段时不要把它当一条可用源
-    final sources = iptvStore.currentIptv.url
-        .split(';')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    if (sources.isEmpty) {
+    try {
+      // 源串里夹杂空片段时不要把它当一条可用源
+      final sources = iptvStore.currentIptv.url
+          .split(';')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (sources.isEmpty) {
+        _sourceSwitchPending = false;
+        return;
+      }
+
+      // 多源时轮两圈（每个源都有不止一次机会），单源时退化为固定重试次数
+      final maxAttempts =
+          sources.length > 1 ? sources.length * 2 : _singleSourceMaxAttempts;
+
+      // 所有源都试过了，停止重试
+      if (_switchAttempts >= maxAttempts) {
+        _sourceSwitchPending = false;
+        _logger.warning("已轮试 $maxAttempts 次仍无法播放，停止重试");
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(
+            content: Text(sources.length > 1
+                ? "所有直播源均不可用"
+                : "该直播源暂不可用，请稍后重试"),
+            duration: const Duration(milliseconds: 1500),
+          ));
+        return;
+      }
+
+      // 健康度最好的排前面，逐个往下试；跳过本次已经尝试过的
+      // （含刚播失败的那条 —— 它由 playerStore 记在 currentUrl 里）。
+      final ordered = SourceHealthUtil.ordered(sources);
+      final skipped = <String>{
+        ..._triedSources,
+        if (playerStore.currentUrl.isNotEmpty) playerStore.currentUrl,
+      };
+      final next = ordered.firstWhere((u) => !skipped.contains(u),
+          orElse: () => ordered[_switchAttempts % ordered.length]);
+      _triedSources.add(next);
+      _switchAttempts++;
+
+      final current = iptvStore.currentIptv;
+      final newIptv = Iptv(
+        idx: current.idx,
+        channel: current.channel,
+        groupIdx: current.groupIdx,
+        name: current.name,
+        url: next,
+        tvgName: current.tvgName,
+        // 同一个频道换备用源，回看能力不变
+        catchup: current.catchup,
+        catchupSource: current.catchupSource,
+        catchupDays: current.catchupDays,
+      );
+
+      // 锁保持到播放操作完成。播放器内的错误回调若在操作期间重入，
+      // 会只置 pending 标志，并在 finally 中安排下一条备用源。
+      await playerStore.playIptv(newIptv);
+    } finally {
+      _switchingSource = false;
       playerStore.isSwitching = false;
-      return;
+      final retryPending = _sourceSwitchPending;
+      _sourceSwitchPending = false;
+      if (retryPending &&
+          mounted &&
+          generation == _channelSelectionGeneration) {
+        scheduleMicrotask(_requestNextAvailableSource);
+      }
     }
-
-    // 多源时轮两圈（每个源都有不止一次机会），单源时退化为固定重试次数
-    final maxAttempts =
-        sources.length > 1 ? sources.length * 2 : _singleSourceMaxAttempts;
-
-    // 所有源都试过了，停止重试
-    if (_switchAttempts >= maxAttempts) {
-      _logger.warning("已轮试 $maxAttempts 次仍无法播放，停止重试");
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(
-          content: Text(sources.length > 1
-              ? "所有直播源均不可用"
-              : "该直播源暂不可用，请稍后重试"),
-          duration: const Duration(milliseconds: 1500),
-        ));
-      playerStore.isSwitching = false;
-      return;
-    }
-
-    // 健康度最好的排前面，逐个往下试；跳过本次已经尝试过的
-    // （含刚播失败的那条 —— 它由 playerStore 记在 currentUrl 里）。
-    final ordered = SourceHealthUtil.ordered(sources);
-    final skipped = <String>{
-      ..._triedSources,
-      if (playerStore.currentUrl.isNotEmpty) playerStore.currentUrl,
-    };
-    final next = ordered.firstWhere((u) => !skipped.contains(u),
-        orElse: () => ordered[_switchAttempts % ordered.length]);
-    _triedSources.add(next);
-    _switchAttempts++;
-
-    final current = iptvStore.currentIptv;
-    final newIptv = Iptv(
-      idx: current.idx,
-      channel: current.channel,
-      groupIdx: current.groupIdx,
-      name: current.name,
-      url: next,
-      tvgName: current.tvgName,
-      // 同一个频道换备用源，回看能力不变
-      catchup: current.catchup,
-      catchupSource: current.catchupSource,
-      catchupDays: current.catchupDays,
-    );
-
-    playerStore.isSwitching = false;
-    await playerStore.playIptv(newIptv);
   }
 
   Future<void> _initData() async {
     playerStore.initPlayer(
       onFreeze: () {
-        if (playerStore.isSwitching) return;
+        if (_switchingSource) {
+          _sourceSwitchPending = true;
+          return;
+        }
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
           ..showSnackBar(const SnackBar(
             content: Text("播放卡顿，尝试切换源..."),
             duration: Duration(milliseconds: 1500),
           ));
-        _switchToNextAvailableSource();
+        _requestNextAvailableSource();
       },
       onError: () {
-        if (playerStore.isSwitching) return;
+        if (_switchingSource) {
+          _sourceSwitchPending = true;
+          return;
+        }
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
           ..showSnackBar(const SnackBar(
             content: Text("播放错误，尝试切换源..."),
             duration: Duration(milliseconds: 1500),
           ));
-        _switchToNextAvailableSource();
+        _requestNextAvailableSource();
       },
     );
 
@@ -251,6 +290,8 @@ class _IptvPageState extends State<IptvPage> with WidgetsBindingObserver {
     final iptvChangeDisposer = reaction((_) {
       return iptvStore.currentIptv;
     }, (iptv) async {
+      _channelSelectionGeneration++;
+      _sourceSwitchPending = false;
       iptvStore.iptvInfoVisible = true;
       _triedSources.clear();
       _switchAttempts = 0;

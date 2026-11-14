@@ -176,6 +176,25 @@ abstract class PlayerStoreBase with Store {
   /// 避免旧请求的 await 回来后覆盖新源（表现为"切到 A 台播的是 B 台"）。
   int _playSeq = 0;
 
+  /// 所有播放源共享一个原生播放器实例，reset / setDataSource / prepareAsync
+  /// 不能并发执行。新请求会立即递增序号，让队列中尚未开始的旧请求失效；
+  /// 已经进入原生调用的请求在下一个 await 边界退出，再轮到最新请求。
+  Future<void> _playQueue = Future<void>.value();
+  int _activePlaySeq = 0;
+
+  Future<void> _enqueuePlayerOperation(Future<void> Function() operation) {
+    final queued = _playQueue.then<void>((_) async {
+      try {
+        await operation();
+      } catch (error, stackTrace) {
+        // 单个播放器操作异常不能让后续播放请求永久留在失败的队列上。
+        _logger.error('播放器操作队列异常', error, stackTrace);
+      }
+    });
+    _playQueue = queued;
+    return queued;
+  }
+
   /// 预热播放器，配置一次永久有效的 FFmpeg option
   ///
   /// 所有 option 打包成一个 [FijkOption] 一次性下发，
@@ -323,6 +342,27 @@ abstract class PlayerStoreBase with Store {
 
   Future<void> _startPlay(Iptv iptv, String url, {required bool playback}) async {
     final seq = ++_playSeq;
+
+    // 新播放意图一到，旧播放的缓冲定时器与异步事件就失效。
+    _freezeTimer?.cancel();
+    _freezeTimer = null;
+    _cancelWatchdog();
+    _cancelFreezeGrace();
+    _cancelStall();
+
+    await _enqueuePlayerOperation(() async {
+      if (_disposed || seq != _playSeq) return;
+      await _startPlayNow(iptv, url, playback: playback, seq: seq);
+    });
+  }
+
+  Future<void> _startPlayNow(
+    Iptv iptv,
+    String url, {
+    required bool playback,
+    required int seq,
+  }) async {
+    _activePlaySeq = seq;
     _playTimestamp = DateTime.now().millisecondsSinceEpoch;
     _rendered = false;
     isPlayback = playback;
@@ -424,31 +464,36 @@ abstract class PlayerStoreBase with Store {
   /// 重新初始化播放器（释放后重建）
   Future<void> reinitPlayer() async {
     if (!_disposed) return;
-    _disposed = false;
-
-    player = FijkPlayer();
-    player.addListener(_playerValueListener);
-    // 新的 FijkPlayer 实例，旧的缓冲订阅收不到它的事件，必须重新挂
-    _bufferSub?.cancel();
-    _bufferSub = player.onBufferStateUpdate.listen(_onBufferState);
-    _bufferPosSub?.cancel();
-    _bufferPosSub = player.onBufferPosUpdate.listen(_onBufferPos);
-    _optionsInitialized = false;
-    // 新实例不带任何已下发的 option，本地缓存一并作废
-    _lastMediacodec = null;
-    _lastVolume = null;
-    _lastReferer = null;
-    _lastUserAgent = null;
-    _hwDecodeFailed = false;
-    _hwDecodeErrorStreak = 0;
-    _rendered = false;
     // 让还挂着的切台请求失效
     _playSeq++;
-    await warmUp();
+    await _enqueuePlayerOperation(() async {
+      if (!_disposed) return;
+      _disposed = false;
+
+      player = FijkPlayer();
+      player.addListener(_playerValueListener);
+      // 新的 FijkPlayer 实例，旧的缓冲订阅收不到它的事件，必须重新挂
+      _bufferSub?.cancel();
+      _bufferSub = player.onBufferStateUpdate.listen(_onBufferState);
+      _bufferPosSub?.cancel();
+      _bufferPosSub = player.onBufferPosUpdate.listen(_onBufferPos);
+      _optionsInitialized = false;
+      // 新实例不带任何已下发的 option，本地缓存一并作废
+      _lastMediacodec = null;
+      _lastVolume = null;
+      _lastReferer = null;
+      _lastUserAgent = null;
+      _hwDecodeFailed = false;
+      _hwDecodeErrorStreak = 0;
+      _rendered = false;
+      _activePlaySeq = _playSeq;
+      await warmUp();
+    });
   }
 
   /// 播放器事件监听
   void _playerValueListener() {
+    if (_activePlaySeq != _playSeq) return;
     final st = player.state;
 
     // 画面已经渲染出来，说明当前模式可用。
@@ -585,6 +630,7 @@ abstract class PlayerStoreBase with Store {
   /// 起播阶段必然处于缓冲中（第一帧还没解出来），那段时间一律不插手，
   /// 交给 [startWatchdogTimeout] 的看门狗——否则每换一次源都要被误判一次卡顿。
   void _onBufferState(bool buffering) {
+    if (_activePlaySeq != _playSeq) return;
     if (!buffering) {
       // 缓冲恢复了，这次抖动不算数
       _freezeGraceTimer?.cancel();
@@ -653,6 +699,7 @@ abstract class PlayerStoreBase with Store {
 
   /// 缓冲进度更新：数据在进，说明源是活的，重新给一轮时间
   void _onBufferPos(Duration _) {
+    if (_activePlaySeq != _playSeq) return;
     if (_stallTimer == null) return;
     _cancelStall();
     // 还在起播缓冲中就继续盯下一轮
@@ -667,6 +714,10 @@ abstract class PlayerStoreBase with Store {
     // 让还在 await 的切台请求失效，避免释放后继续往原生写入
     _playSeq++;
 
+    await _enqueuePlayerOperation(_disposePlayerNow);
+  }
+
+  Future<void> _disposePlayerNow() async {
     try {
       _logger.debug("释放播放器资源...");
       _freezeTimer?.cancel();

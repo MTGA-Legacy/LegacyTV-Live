@@ -14,7 +14,10 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  fijkplayer_ijkfix: ^0.0.11
+  # Local bridge keeps the existing Dart API while using the API19 IJK build
+  # published by MTGA-Legacy/blbl (debugly/ijkplayer native library).
+  fijkplayer_ijkfix:
+    path: packages/fijkplayer_ijkfix
 
   # 状态管理
   # get: ^4.6.6

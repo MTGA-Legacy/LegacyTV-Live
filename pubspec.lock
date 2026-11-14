@@ -237,9 +237,9 @@ packages:
     dependency: "direct main"
     description:
       name: fijkplayer_ijkfix
-      sha256: fbce53a25a59c0651dc510440d27d1c75556b203685be871844928ccb099094d
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/fijkplayer_ijkfix"
+      relative: true
+    source: path
     version: "0.0.11"
   file:
     dependency: transitive

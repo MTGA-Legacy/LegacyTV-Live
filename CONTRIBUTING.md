@@ -27,7 +27,9 @@ flutter run
 flutter test
 ```
 
-> 播放内核使用 `fijkplayer_ijkfix`（基于 ijkplayer 的定制版）。
+> 播放桥接保留 `fijkplayer_ijkfix` 的 Dart API，源码在
+> `packages/fijkplayer_ijkfix/`；其 Android AAR 和 API19 ARM32 原生库来自
+> `MTGA-Legacy/blbl` 的 `blbl-api19` 构建（debugly/ijkplayer）。
 > 如果依赖拉取失败，先确认已能访问 pub.dev；仍失败请开 Issue 说明。
 
 ## 目录结构
